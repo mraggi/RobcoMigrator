@@ -1,16 +1,21 @@
-/.cache/
-/.idea/
-/.vs/
-/.vscode/
-/.xmake/
+# dot folders
+.cache/
+.idea/
+.vs/
+.vscode/
+.xmake/
 
-/build/
-/vs/
+# folders
+build*/
+vs*/
+old*/
+Data*/
 
-*.7z
-*.log
-*.rar
-*.tar.gz
+# files
 *.zip
-CMakeUserPresets.json
 compile_commands.json
+*.kate-swp
+
+.kdev4/
+BaseNPCSwapperF4.kdev4
+*Gemini*

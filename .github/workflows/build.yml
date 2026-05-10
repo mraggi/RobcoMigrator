@@ -12,8 +12,9 @@ jobs:
     runs-on: windows-latest
 
     env:
+      # Bypass GitHub Actions token limits for vcpkg
       VCPKG_BINARY_SOURCES: 'clear;default'
-      # Tell CMake to route the MSVC compiler through sccache
+      # Route the MSVC compiler through sccache for instant rebuilds
       CMAKE_C_COMPILER_LAUNCHER: sccache
       CMAKE_CXX_COMPILER_LAUNCHER: sccache
 
@@ -28,7 +29,6 @@ jobs:
         with:
           cmake-version: 'latest'
 
-      # NEW: Setup Mozilla sccache to cache the CommonLibF4 build
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.4
 
@@ -48,6 +48,7 @@ jobs:
         run: >
           cmake -B build -S .
           -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+          -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
 
       - name: Build
         run: cmake --build build --config Release
