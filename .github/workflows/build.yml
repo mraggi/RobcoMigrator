@@ -1,0 +1,53 @@
+name: Build RobCo Migrator (All-Versions)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    env:
+      VCPKG_BINARY_SOURCES: 'clear;default'
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Latest CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: 'latest'
+
+      - name: Patch MSVC Preprocessor Bug in CommonLibF4
+        run: |
+          $file = "lib/CommonLibF4/include/REX/W32/CORE.hpp"
+          if (Test-Path $file) {
+              (Get-Content $file) -replace '#if _INC_WINAPIFAMILY != 0', '#if !defined(_INC_WINAPIFAMILY)' | Set-Content $file
+          }
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '5e5d0e1cd7785623065e77eff011afdeec1a3574'
+
+      - name: Configure CMake
+        run: >
+          cmake -B build -S .
+          -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RobCoMigrator_AllVersions
+          # Wildcard catches the DLL wherever the template's CMake macro decides to put it
+          path: build/**/*.dll
