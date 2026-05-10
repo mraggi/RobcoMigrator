@@ -48,10 +48,23 @@ namespace RobCoMigrator
 
 	std::string GetRobCoID(RE::TESForm* a_form) {
 		if (!a_form) return "UNKNOWN|0";
+
+		uint32_t formID = a_form->GetFormID();
 		auto file = a_form->GetFile(0);
-		// FIX: decay std::array to raw char pointer to satisfy ternary operator
 		std::string pluginName = file ? file->filename.data() : "UNKNOWN";
-		return std::format("{}|{:X}", pluginName, a_form->GetLocalFormID());
+
+		// Determine if it's a light plugin by checking the load index (first byte)
+		uint32_t loadIndex = (formID >> 24) & 0xFF;
+
+		if (loadIndex == 0xFE) {
+			// Light plugin (ESL): Local ID is the last 3 hex digits (12 bits)
+			// RobCo Patcher expects exactly 3 digits for light plugins
+			return std::format("{}|{:03X}", pluginName, formID & 0xFFF);
+		} else {
+			// Standard plugin (ESM/ESP): Local ID is the last 6 hex digits (24 bits)
+			// This captures the correct ID for Fallout4.esm and all standard mods
+			return std::format("{}|{:06X}", pluginName, formID & 0xFFFFFF);
+		}
 	}
 
 	std::string GetFileHeaderTimestamp(const fs::path& a_path, const std::string& a_fallbackTimestamp) {
