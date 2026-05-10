@@ -1,5 +1,5 @@
 #include "LLMigrator.hpp"
-#include <F4SE/F4SE.h>
+#include <F4SE/F4SE.hpp>
 
 #ifndef DLLEXPORT
 #define DLLEXPORT __declspec(dllexport)
