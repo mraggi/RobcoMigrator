@@ -2,11 +2,11 @@
 
 cmake_minimum_required(VERSION 4.3.0)
 
-set(COMMONLIB_PLUGIN_NAME "UnknownPlugin")
-set(COMMONLIB_PLUGIN_AUTHOR "Unknown Author")
-set(COMMONLIB_PLUGIN_VERSION "1.0.0.0")
+set(COMMONLIB_PLUGIN_NAME "RobCoMigrator")
+set(COMMONLIB_PLUGIN_AUTHOR "Miguel Raggi")
+set(COMMONLIB_PLUGIN_VERSION "0.9.0.0")
 set(COMMONLIB_PLUGIN_LICENSE "GPL-3.0 License")
-set(COMMONLIB_PLUGIN_DESCRIPTION "${COMMONLIB_PLUGIN_NAME}")
+set(COMMONLIB_PLUGIN_DESCRIPTION "Safely extract and format dynamic leveled list injections into RobCo Patcher files.")
 
 string(TIMESTAMP COMMONLIB_PLUGIN_COPYRIGHT_YEAR "%Y" UTC)
 
@@ -121,7 +121,8 @@ set_xse_output_path("${PROJECT_NAME}")
 target_compile_definitions(
 	"${PROJECT_NAME}"
 	PRIVATE
-		""
+		"NOMINMAX"
+		"WIN32_LEAN_AND_MEAN"
 )
 
 # --- Link ---

@@ -1,0 +1,130 @@
+{
+  "modName": "RobCo Migrator",
+  "displayName": "RobCo Migrator",
+  "minMcmVersion": 1,
+  "pages": [
+    {
+      "pageDisplayName": "Extraction Tool",
+      "content": [
+        {
+          "type": "text",
+          "text": "Welcome to the RobCo Migrator Tool."
+        },
+        {
+          "type": "text",
+          "text": "This utility safely scans your current save file for dynamically injected items inside Leveled Lists, allowing you to convert them to RobCo Patcher formats."
+        },
+        {
+          "type": "empty"
+        },
+        {
+          "type": "text",
+          "text": "---------------------------------------------------------------------------------"
+        },
+        {
+          "type": "text",
+          "text": "[ CRITICAL INSTRUCTIONS - READ BEFORE CLICKING ]"
+        },
+        {
+          "type": "text",
+          "text": "1. [ HARD SAVE REQUIRED ] Make a hard save of your game right now."
+        },
+        {
+          "type": "text",
+          "text": "2. Click ONE of the 'Generate' buttons below. If this is your first time running this, all 3 buttons do exactly the same thing."
+        },
+        {
+          "type": "text",
+          "text": "3. Alt-Tab out of Fallout 4 and review the generated .ini file in Data/F4SE/Plugins/RobCo_Patcher/..."
+        },
+        {
+          "type": "text",
+          "text": "4. If the file looks correct, click 'I've reviewed the ini file...', then click '[ REVERT ALL LISTS ]'."
+        },
+        {
+          "type": "text",
+          "text": "5. [ NEW SLOT REQUIRED ] Immediately save your game into a NEW slot."
+        },
+        {
+          "type": "text",
+          "text": "6. [ EXIT TO DESKTOP ] Do not keep playing. Load the new save normally."
+        },
+        {
+          "type": "empty"
+        },
+        {
+          "type": "text",
+          "text": "---------------------------------------------------------------------------------"
+        },
+        {
+          "type": "empty"
+        },
+        {
+          "id": "btnMerge",
+          "type": "button",
+          "text": "Generate: First / Update Previous",
+          "help": "Use this when generating the first time, or if you've played for a while and want to update the file for new injections. Scans and safely merges new items into the existing list.",
+          "action": {
+            "type": "CallGlobalFunction",
+            "script": "RobCoMigrator",
+            "function": "RunMigrationMerge"
+          }
+        },
+        {
+          "id": "btnOverwrite",
+          "type": "button",
+          "text": "Generate: Rename old ini file to .old",
+          "help": "Use this if you never called revert last time and want to generate a new file. Safely tucks away the old INI file with a timestamp (.old) and creates a completely fresh scan.",
+          "action": {
+            "type": "CallGlobalFunction",
+            "script": "RobCoMigrator",
+            "function": "RunMigrationOverwrite"
+          }
+        },
+        {
+          "id": "btnCreateNew",
+          "type": "button",
+          "text": "Generate: Rename old ini file with timestamp with .ini extension",
+          "help": "Use this if you prefer separate INI files so that you can review only the 'new' additions. Creates a new timestamped file alongside the old ones.",
+          "action": {
+            "type": "CallGlobalFunction",
+            "script": "RobCoMigrator",
+            "function": "RunMigrationCreateNew"
+          }
+        },
+        {
+          "type": "empty"
+        },
+        {
+          "type": "text",
+          "text": "---------------------------------------------------------------------------------"
+        },
+        {
+          "type": "empty"
+        },
+        {
+          "id": "btnUnlockRevert",
+          "type": "button",
+          "text": "I've reviewed the ini file and am ready to revert",
+          "help": "Safety toggle. You must click this to unlock the Revert button below for this session.",
+          "action": {
+            "type": "CallGlobalFunction",
+            "script": "RobCoMigrator",
+            "function": "RunMigrationUnlock"
+          }
+        },
+        {
+          "id": "btnRevert",
+          "type": "button",
+          "text": "[ REVERT ALL LISTS ]",
+          "help": "Purges all dynamic injections from your save file's RAM. MUST generate a patch and unlock the toggle first.",
+          "action": {
+            "type": "CallGlobalFunction",
+            "script": "RobCoMigrator",
+            "function": "RunMigrationRevert"
+          }
+        }
+      ]
+    }
+  ]
+}
