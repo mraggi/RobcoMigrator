@@ -15,7 +15,7 @@ jobs:
       VCPKG_BINARY_SOURCES: 'clear;default'
       CMAKE_C_COMPILER_LAUNCHER: sccache
       CMAKE_CXX_COMPILER_LAUNCHER: sccache
-      # CRITICAL: Tells sccache to use the GitHub Actions Cache API
+      # Explicitly route sccache to the new GHA cache backend
       SCCACHE_GHA_ENABLED: "true"
 
     steps:
@@ -29,13 +29,9 @@ jobs:
         with:
           cmake-version: 'latest'
 
+      # FIX: Bumped to v0.0.10 and removed the legacy v0.5.4 constraint
       - name: Setup sccache
-        # We must expose the GitHub token so sccache can write to the cache API
-        uses: mozilla-actions/sccache-action@v0.0.4
-        with:
-          version: "v0.5.4"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Patch MSVC Preprocessor Bug in CommonLibF4
         run: |
