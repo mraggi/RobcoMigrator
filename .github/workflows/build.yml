@@ -12,11 +12,11 @@ jobs:
     runs-on: windows-latest
 
     env:
-      # Bypass GitHub Actions token limits for vcpkg
       VCPKG_BINARY_SOURCES: 'clear;default'
-      # Route the MSVC compiler through sccache for instant rebuilds
       CMAKE_C_COMPILER_LAUNCHER: sccache
       CMAKE_CXX_COMPILER_LAUNCHER: sccache
+      # CRITICAL: Tells sccache to use the GitHub Actions Cache API
+      SCCACHE_GHA_ENABLED: "true"
 
     steps:
       - name: Checkout Repository
@@ -30,7 +30,12 @@ jobs:
           cmake-version: 'latest'
 
       - name: Setup sccache
+        # We must expose the GitHub token so sccache can write to the cache API
         uses: mozilla-actions/sccache-action@v0.0.4
+        with:
+          version: "v0.5.4"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Patch MSVC Preprocessor Bug in CommonLibF4
         run: |

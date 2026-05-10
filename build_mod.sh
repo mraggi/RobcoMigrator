@@ -28,10 +28,10 @@ cd ..
 cp src/config.json "Data/MCM/Config/$MOD_NAME/"
 
 # 5. Copy the F4SE C++ DLL
-if [ -f "build/RobCoMigrator_AllVersions/Release/RobCoMigrator.dll" ]; then
-    cp build/RobCoMigrator_AllVersions/Release/RobCoMigrator.dll Data/F4SE/Plugins/
+if [ -f "build/Release/RobCoMigrator.dll" ]; then
+    cp build/Release/RobCoMigrator.dll Data/F4SE/Plugins/
 else
-    echo "ERROR: DLL not found at build/RobCoMigrator_AllVersions/Release/RobCoMigrator.dll"
+    echo "ERROR: DLL not found at build/Release/RobCoMigrator.dll"
     exit 1
 fi
 

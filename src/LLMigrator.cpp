@@ -161,6 +161,12 @@ namespace RobCoMigrator
 
 		// FIX: Hardcode to avoid virtual table walk of stripped PlayerCharacter methods
 		std::string playerName = "Player";
+		if (auto player = RE::PlayerCharacter::GetSingleton()) {
+			auto displayName = player->GetDisplayName();
+			if (displayName && !displayName->empty()) {
+				playerName = displayName->c_str();
+			}
+		}
 
 		auto now = std::chrono::system_clock::now();
 		auto time_t_now = std::chrono::system_clock::to_time_t(now);
