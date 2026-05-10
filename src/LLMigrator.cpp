@@ -41,7 +41,7 @@ namespace RobCoMigrator
 
     std::string GetFullName(RE::TESForm* a_form) {
         if (!a_form) return "";
-        auto fullNameComponent = a_form->As<RE::TESFullName>();
+        auto fullNameComponent = dynamic_cast<RE::TESFullName*>(a_form);
         if (fullNameComponent) {
             const char* name = fullNameComponent->fullName.c_str();
             if (name && name[0] != '\0') return std::string(name);
@@ -359,10 +359,10 @@ namespace RobCoMigrator
     }
 
     bool RegisterPapyrus(RE::BSScript::IVirtualMachine* a_vm) {
-        a_vm->BindNativeMethod("RobCoMigrator", "GeneratePatch", GeneratePatch);
-        a_vm->BindNativeMethod("RobCoMigrator", "SetRevertUnlocked", SetRevertUnlocked);
-        a_vm->BindNativeMethod("RobCoMigrator", "GetRevertStatus", GetRevertStatus);
-        a_vm->BindNativeMethod("RobCoMigrator", "GetInjectedLists", GetInjectedLists);
+        a_vm->RegisterFunction("GeneratePatch", "RobCoMigrator", GeneratePatch);
+        a_vm->RegisterFunction("SetRevertUnlocked", "RobCoMigrator", SetRevertUnlocked);
+        a_vm->RegisterFunction("GetRevertStatus", "RobCoMigrator", GetRevertStatus);
+        a_vm->RegisterFunction("GetInjectedLists", "RobCoMigrator", GetInjectedLists);
         return true;
     }
 }
