@@ -296,10 +296,10 @@ namespace RobCoMigrator
 
 	bool RegisterPapyrus(RE::BSScript::IVirtualMachine* a_vm) {
 		// FIX: Decoupled native binding signature
-		RE::BSScript::BindNativeMethod(a_vm, "RobCoMigrator", "GeneratePatch", GeneratePatch);
-		RE::BSScript::BindNativeMethod(a_vm, "RobCoMigrator", "SetRevertUnlocked", SetRevertUnlocked);
-		RE::BSScript::BindNativeMethod(a_vm, "RobCoMigrator", "GetRevertStatus", GetRevertStatus);
-		RE::BSScript::BindNativeMethod(a_vm, "RobCoMigrator", "GetInjectedLists", GetInjectedLists);
+		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GeneratePatch", GeneratePatch));
+		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "SetRevertUnlocked", SetRevertUnlocked));
+		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GetRevertStatus", GetRevertStatus));
+		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GetInjectedLists", GetInjectedLists));
 		return true;
 	}
 }
