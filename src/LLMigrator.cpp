@@ -59,11 +59,11 @@ namespace RobCoMigrator
 		if (loadIndex == 0xFE) {
 			// Light plugin (ESL): Local ID is the last 3 hex digits (12 bits)
 			// RobCo Patcher expects exactly 3 digits for light plugins
-			return std::format("{}|{:03X}", pluginName, formID & 0xFFF);
+			return std::format("{}|{:X}", pluginName, formID & 0xFFF);
 		} else {
 			// Standard plugin (ESM/ESP): Local ID is the last 6 hex digits (24 bits)
 			// This captures the correct ID for Fallout4.esm and all standard mods
-			return std::format("{}|{:06X}", pluginName, formID & 0xFFFFFF);
+			return std::format("{}|{:X}", pluginName, formID & 0xFFFFFF);
 		}
 	}
 
