@@ -21,7 +21,10 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+# LTO disabled: MSVC's c2.dll ICEs during whole-program code generation on this
+# project. The DLL is tiny and called once per session, so LTO buys essentially
+# nothing here. Re-enable if/when the compiler bug is fixed.
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
 set(CMAKE_OPTIMIZE_DEPENDENCIES ON)
 

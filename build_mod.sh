@@ -5,6 +5,7 @@ set -e
 
 MOD_NAME="RobCo Migrator"
 ZIP_NAME="${MOD_NAME}.zip"
+MOD_DIR="/home/mraggi/Fast/SteamLibrary/steamapps/compatdata/377160/pfx/drive_c/users/steamuser/AppData/Local/ModOrganizer/Fallout 4/mods/RobCo Migrator"
 
 echo "=== Starting Build & Packaging for $MOD_NAME ==="
 
@@ -20,6 +21,8 @@ mkdir -p "Data/MCM/Config/$MOD_NAME"
 # 3. Compile Papyrus and distribute script files
 cd src
 caprica.sh RobCoMigrator.psc
+cp RobCoMigrator.pex "$MOD_DIR/Scripts/"
+cp RobCoMigrator.psc "$MOD_DIR/Scripts/Source/User/"
 mv RobCoMigrator.pex ../Data/Scripts/
 cp RobCoMigrator.psc ../Data/Scripts/Source/User/
 cd ..

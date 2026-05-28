@@ -6,124 +6,72 @@
     {
       "pageDisplayName": "Extraction Tool",
       "content": [
+        { "type": "text", "text": "<font size='28'>RobCo Migrator</font>" },
+        { "type": "text", "text": "Convert script-injected leveled-list entries into a clean RobCo Patcher .ini file." },
+        { "type": "empty" },
+
+        { "type": "text", "text": "<font size='22'>What this tool actually does</font>" },
+        { "type": "text", "text": "Many Fallout 4 mods inject items into leveled lists at runtime, via Papyrus. Those injections live INSIDE your save file - they bloat it, they don't update when you change load order, and they often persist after you uninstall the mod that created them." },
+        { "type": "text", "text": "This tool scans your current save, writes out every dynamic injection it finds as a RobCo Patcher .ini file, and then (when you tell it to) wipes the in-save injections so RobCo Patcher takes over. Net result: same items, but they come from disk - not your save." },
+        { "type": "empty" },
+
+        { "type": "text", "text": "<font size='22'>Before you click Generate</font>" },
+        { "type": "text", "text": "  1.  Make a hard save right now. Not a quicksave. A regular save into a NEW slot." },
+        { "type": "text", "text": "  2.  Make sure RobCo Patcher is installed. (This tool produces files RobCo Patcher reads - it doesn't apply them itself.)" },
+        { "type": "empty" },
+
         {
-          "type": "text",
-          "text": "Welcome to the RobCo Migrator Tool."
-        },
-        {
-          "type": "text",
-          "text": "This utility safely scans your current save file for dynamically injected items inside Leveled Lists, allowing you to convert them to RobCo Patcher formats."
-        },
-        {
-          "type": "empty"
-        },
-        {
-          "type": "text",
-          "text": "---------------------------------------------------------------------------------"
-        },
-        {
-          "type": "text",
-          "text": "[ CRITICAL INSTRUCTIONS - READ BEFORE CLICKING ]"
-        },
-        {
-          "type": "text",
-          "text": "1. [ HARD SAVE REQUIRED ] Make a hard save of your game right now."
-        },
-        {
-          "type": "text",
-          "text": "2. Click ONE of the 'Generate' buttons below. If this is your first time running this, all 3 buttons do exactly the same thing."
-        },
-        {
-          "type": "text",
-          "text": "3. Alt-Tab out of Fallout 4 and review the generated .ini file in Data/F4SE/Plugins/RobCo_Patcher/..."
-        },
-        {
-          "type": "text",
-          "text": "4. If the file looks correct, click 'I've reviewed the ini file...', then click '[ REVERT ALL LISTS ]'."
-        },
-        {
-          "type": "text",
-          "text": "5. [ NEW SLOT REQUIRED ] Immediately save your game into a NEW slot."
-        },
-        {
-          "type": "text",
-          "text": "6. [ EXIT TO DESKTOP ] Do not keep playing. Load the new save normally."
-        },
-        {
-          "type": "empty"
-        },
-        {
-          "type": "text",
-          "text": "---------------------------------------------------------------------------------"
-        },
-        {
-          "type": "empty"
-        },
-        {
-          "id": "btnMerge",
+          "id": "btnGenerate",
           "type": "button",
-          "text": "Generate: First / Update Previous",
-          "help": "Use this when generating the first time, or if you've played for a while and want to update the file for new injections. Scans and safely merges new items into the existing list.",
+          "text": "Generate / Update Patch",
+          "help": "Scans the live leveled lists and writes Patch_<your character name>.ini. Safe to run on a save that already has a patch file - existing entries are kept, new ones are added, duplicates are merged into one line, malformed lines are auto-corrected.",
           "action": {
             "type": "CallGlobalFunction",
             "script": "RobCoMigrator",
-            "function": "RunMigrationMerge"
+            "function": "RunMigration"
           }
         },
-        {
-          "id": "btnOverwrite",
-          "type": "button",
-          "text": "Generate: Rename old ini file to .old",
-          "help": "Use this if you never called revert last time and want to generate a new file. Safely tucks away the old INI file with a timestamp (.old) and creates a completely fresh scan.",
-          "action": {
-            "type": "CallGlobalFunction",
-            "script": "RobCoMigrator",
-            "function": "RunMigrationOverwrite"
-          }
-        },
-        {
-          "id": "btnCreateNew",
-          "type": "button",
-          "text": "Generate: Rename old ini file with timestamp with .ini extension",
-          "help": "Use this if you prefer separate INI files so that you can review only the 'new' additions. Creates a new timestamped file alongside the old ones.",
-          "action": {
-            "type": "CallGlobalFunction",
-            "script": "RobCoMigrator",
-            "function": "RunMigrationCreateNew"
-          }
-        },
-        {
-          "type": "empty"
-        },
-        {
-          "type": "text",
-          "text": "---------------------------------------------------------------------------------"
-        },
-        {
-          "type": "empty"
-        },
+        { "type": "text", "text": "<font color='#888888'>One button does it all. If you've never run this before, click it. If you've already got a patch file and want to update it, click it. The tool figures out the right thing to do.</font>" },
+        { "type": "empty" },
+
+        { "type": "text", "text": "<font size='22'>After clicking Generate</font>" },
+        { "type": "text", "text": "The success message will tell you the path of the file. Alt-tab out, OPEN that file, and skim it. You don't have to understand every line - just confirm it has roughly the lists you expect." },
+        { "type": "text", "text": "Then come back here and use the two buttons below in order: first 'I've reviewed the .ini', then 'REVERT ALL LISTS'. The order matters - the revert button is a safety-gated 'wipe live injections' action and the MCM wants confirmation that you actually looked at the file first." },
+        { "type": "empty" },
+
         {
           "id": "btnUnlockRevert",
           "type": "button",
-          "text": "I've reviewed the ini file and am ready to revert",
-          "help": "Safety toggle. You must click this to unlock the Revert button below for this session.",
+          "text": "I've reviewed the .ini and I'm ready to revert",
+          "help": "Confirms that you've looked at the generated file. Click this BEFORE the Revert button. The Revert button stays disabled until you do.",
           "action": {
             "type": "CallGlobalFunction",
             "script": "RobCoMigrator",
             "function": "RunMigrationUnlock"
           }
         },
+
         {
           "id": "btnRevert",
           "type": "button",
           "text": "[ REVERT ALL LISTS ]",
-          "help": "Purges all dynamic injections from your save file's RAM. MUST generate a patch and unlock the toggle first.",
+          "help": "Purges the live script-injected entries from every leveled list in your save's RAM. Required step - skipping it means you'd have duplicate injections (the original ones in your save AND the ones RobCo Patcher applies fresh).",
           "action": {
             "type": "CallGlobalFunction",
             "script": "RobCoMigrator",
             "function": "RunMigrationRevert"
           }
-        }
+        },
+        { "type": "empty" },
+
+        { "type": "text", "text": "<font size='22'>After reverting</font>" },
+        { "type": "text", "text": "Save into a NEW slot, then EXIT TO DESKTOP. Don't keep playing on this session - the papyrus VM is mid-mutation and continuing is asking for trouble." },
+        { "type": "text", "text": "Launch the game again, load the new save, and you're done. RobCo Patcher reapplies your patch on every load from now on." },
+        { "type": "empty" },
+
+        { "type": "text", "text": "<font size='22'>Per-character files</font>" },
+        { "type": "text", "text": "Patch files are named after your character: Patch_&lt;character name&gt;.ini. If you switch characters and the tool finds patch files belonging to other characters in the folder, you'll get a warning on game load - because RobCo Patcher loads ALL .ini files in that folder, including the wrong characters'." },
+        { "type": "text", "text": "If you see that warning: alt-tab, go to Data/F4SE/Plugins/RobCo_Patcher/leveledList/RobCoMigrator_Export/, and either delete or move out the files that don't belong to your current character." }
       ]
     }
   ]
