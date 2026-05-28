@@ -72,6 +72,19 @@ Git submodule. Provides `RE::` and `F4SE::` namespaces (Fallout 4 reverse-engine
 - `COMMONLIB_OPTION_FMT = ON` (ships `{fmt}`)
 - vcpkg also provides `spdlog` and `fmt` (see `vcpkg.json`)
 
+### MCM config.json Format
+
+`src/config.json` defines the Mod Configuration Menu layout. Key rules:
+
+- **`text` elements**: plain text only by default. Add `"html": true` to enable `<b>`, `<i>`, `<u>`, `<font color='#RRGGBB'>`, and `<font size='N'>`. Use grey (`#AAAAAA`) for description/context text.
+- **`section` elements**: always render HTML without needing `"html": true`. Use `<font size='20'><b>Header</b></font>` for sized section headers.
+- Use `"type": "spacer"` (optionally with `"numLines": N`) for vertical spacing.
+- **`switcher`** (ON/OFF toggle): use `"valueOptions": { "sourceType": "ModSettingBool" }` with an `"id"` of format `"keyName:SectionName"`. MCM persists the bool in `Data/MCM/Settings/<modName>.ini`. Read it from Papyrus via `MCM.GetModSettingBool(modName, "keyName:Section")` and write via `MCM.SetModSettingBool(...)`. No ESP required.
+- Button `action` must specify `"type": "CallGlobalFunction"` with `"script"` (Papyrus script name) and `"function"` (global function name).
+- `"id"` on a button allows enabling/disabling it from Papyrus via `MCM.SetEntryEnabled()`.
+
+Supported types: `section`, `text`, `spacer`/`empty`, `button`, `toggle`/`switcher`, `slider`, `stepper`, `dropdown`, `hotkey`, `image`.
+
 ### Known Quirks
 - `localtime_s` is MSVC-only; this code will not compile on GCC/Clang without a shim.
 - `MCM.psc` stub exists only so Caprica can resolve the `MCM` dependency when compiling `RobCoMigrator.psc` locally. Do not modify it.

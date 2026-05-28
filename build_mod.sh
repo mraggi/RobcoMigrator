@@ -29,6 +29,7 @@ cd ..
 
 # 4. Copy MCM Configuration
 cp src/config.json "Data/MCM/Config/$MOD_NAME/"
+cp src/config.json "$MOD_DIR/MCM/Config/RobCo Migrator/"
 
 # 5. Copy the F4SE C++ DLL
 if [ -f "build/Release/RobCoMigrator.dll" ]; then

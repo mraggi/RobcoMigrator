@@ -45,9 +45,7 @@ namespace RobCoMigrator
     std::vector<RE::TESForm*> GetInjectedLists(std::monostate);
     std::int32_t GetLastFixCount(std::monostate);
     RE::BSFixedString GetCurrentPlayerName(std::monostate);
-
-    // F4SE message listener hook (kPostLoadGame -> check per-player files)
-    void OnGameLoaded();
+    RE::BSFixedString GetForeignPlayerFileWarning(std::monostate);
 
     bool RegisterPapyrus(RE::BSScript::IVirtualMachine* a_vm);
 }

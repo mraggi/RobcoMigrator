@@ -11,10 +11,6 @@
 #include <unordered_set>
 #include <cctype>
 
-#include <RE/B/BSScriptUtil_External.hpp>
-#include <RE/G/GameVM.hpp>
-#include <F4SE/TaskInterface.hpp>
-
 namespace fs = std::filesystem;
 
 namespace RobCoMigrator
@@ -553,8 +549,9 @@ namespace RobCoMigrator
 		return RE::BSFixedString(GetCurrentPlayerNameRaw());
 	}
 
-	// Scans the target dir for Patch_<name>.ini files. Returns the player-name part
-	// of every file that does NOT match the current player.
+	// Scans the target dir for Patch_<name>.ini files belonging to characters other
+	// than the one whose name is passed in. Always safe to call - pure filesystem,
+	// no game state access.
 	struct PlayerFileMismatch {
 		std::string filename;
 		std::string playerName;
@@ -569,7 +566,8 @@ namespace RobCoMigrator
 
 		for (const auto& entry : fs::directory_iterator(targetDir, ec)) {
 			if (ec) break;
-			if (!entry.is_regular_file()) continue;
+			std::error_code ec2;
+			if (!entry.is_regular_file(ec2) || ec2) continue;
 			if (entry.path().extension() != ".ini") continue;
 
 			std::string stem = entry.path().stem().string();
@@ -584,44 +582,33 @@ namespace RobCoMigrator
 		return mismatches;
 	}
 
-	void OnGameLoaded() {
-		// Defer to the next main-thread tick so the VM is definitely up.
-		F4SE::GetTaskInterface()->AddTask([]() {
-			std::string current = GetCurrentPlayerNameRaw();
-			auto mismatches = FindMismatchedPlayerFiles(current);
-			if (mismatches.empty()) return;
+	// Build the foreign-files warning message for the current player. Returns an
+	// empty string if there are no mismatches. Called from Papyrus during MCM
+	// interaction - never from a load-game callback (the VM isn't safe to call
+	// into during kPostLoadGame).
+	RE::BSFixedString GetForeignPlayerFileWarning(std::monostate) {
+		std::string current = GetCurrentPlayerNameRaw();
+		auto mismatches = FindMismatchedPlayerFiles(current);
+		if (mismatches.empty()) return RE::BSFixedString("");
 
-			std::string body = std::format(
-				"You're playing as '{}', but I found patch file(s) belonging to other characters in the RobCo Patcher folder:\n\n",
-				current);
+		std::string body = std::format(
+			"You're playing as '{}', but the RobCo Patcher folder also contains patch file(s) belonging to other characters:\n\n",
+			current);
 
-			for (const auto& m : mismatches) {
-				body += std::format("  - {}  (for character '{}')\n", m.filename, m.playerName);
-			}
+		for (const auto& m : mismatches) {
+			body += std::format("  - {}  (for character '{}')\n", m.filename, m.playerName);
+		}
 
-			body +=
-				"\nRobCo Patcher loads EVERY .ini file in that folder, so those other characters' "
-				"injections are being applied to YOUR save too. That is almost certainly not what you want.\n\n"
-				"To fix this: alt-tab out and either delete those files or move them out of the folder.\n\n"
-				"Folder location:\nData/F4SE/Plugins/RobCo_Patcher/leveledList/RobCoMigrator_Export/\n\n"
-				"(This warning will repeat every time you load a save until the foreign files are gone.)";
+		body +=
+			"\nRobCo Patcher loads EVERY .ini file in that folder. So those other characters' injections "
+			"are being applied to your current save too - which is almost certainly not what you want.\n\n"
+			"Fix: alt-tab out and either delete those files or move them somewhere else.\n\n"
+			"Folder:\nData/F4SE/Plugins/RobCo_Patcher/leveledList/RobCoMigrator_Export/";
 
-			Log(std::format("Per-player file warning fired: {} mismatched file(s) for current player '{}'.",
-							mismatches.size(), current));
+		Log(std::format("Foreign-file warning surfaced: {} mismatched file(s) for current player '{}'.",
+						mismatches.size(), current));
 
-			auto vm = RE::GameVM::GetSingleton() ? RE::GameVM::GetSingleton()->GetVMInterface() : nullptr;
-			if (!vm) {
-				Log("Cannot show load warning: VM not available.");
-				return;
-			}
-
-			RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> nullCallback;
-			vm->InvokeStaticFunction(
-				RE::BSFixedString("RobCoMigrator"),
-				RE::BSFixedString("ShowLoadWarning"),
-				nullCallback,
-				RE::BSFixedString(body));
-		});
+		return RE::BSFixedString(body);
 	}
 
 	bool RegisterPapyrus(RE::BSScript::IVirtualMachine* a_vm) {
@@ -631,6 +618,7 @@ namespace RobCoMigrator
 		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GetInjectedLists", GetInjectedLists));
 		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GetLastFixCount", GetLastFixCount));
 		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GetCurrentPlayerName", GetCurrentPlayerName));
+		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GetForeignPlayerFileWarning", GetForeignPlayerFileWarning));
 		return true;
 	}
 }
