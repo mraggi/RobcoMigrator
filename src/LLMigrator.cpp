@@ -18,9 +18,11 @@ namespace RobCoMigrator
 	bool g_bSafeToRevert = false;
 	bool g_bUserUnlockedRevert = false;
 	std::int32_t g_lastFixCount = 0;
+	LogLevel g_logLevel = LogLevel::Standard;
 	static std::mutex logMutex;
 
 	static constexpr const char* kModFolderName = "RobCoMigrator_Export";
+	static std::string g_modFolderName = kModFolderName;
 
 	void Log(const std::string& msg) {
 		std::lock_guard<std::mutex> lock(logMutex);
@@ -50,6 +52,15 @@ namespace RobCoMigrator
 			if (name && name[0] != '\0') return std::string(name);
 		}
 		return "";
+	}
+
+	static std::string SanitizeFilename(std::string name) {
+		static constexpr std::string_view kIllegal = R"(\/:*?"<>|)";
+		for (char& c : name) {
+			if (static_cast<unsigned char>(c) < 32 || kIllegal.find(c) != std::string_view::npos)
+				c = '_';
+		}
+		return name;
 	}
 
 	std::string GetRobCoID(RE::TESForm* a_form) {
@@ -141,6 +152,7 @@ namespace RobCoMigrator
 	struct ParsedFile {
 		std::vector<TargetListData> lists;
 		std::vector<std::string> preservedLines;
+		int fixCount = 0;
 	};
 
 	struct LenientParseResult {
@@ -215,9 +227,9 @@ namespace RobCoMigrator
 		if (parts.size() > 4) { result.wasFixed = true; }
 
 		result.entry = BuildInjectionEntry(robCoID,
-			static_cast<std::uint16_t>(level),
-			static_cast<std::uint16_t>(count),
-			static_cast<std::int8_t>(chanceNone));
+			static_cast<std::uint16_t>(std::clamp(level, 0, 65535)),
+			static_cast<std::uint16_t>(std::clamp(count, 0, 65535)),
+			static_cast<std::int8_t>(std::clamp(chanceNone, 0, 100)));
 		result.ok = true;
 		return result;
 	}
@@ -247,7 +259,7 @@ namespace RobCoMigrator
 			std::smatch matches;
 			if (!std::regex_match(line, matches, linePattern)) {
 				result.preservedLines.push_back(line);
-				++g_lastFixCount;
+				++result.fixCount;
 				continue;
 			}
 
@@ -271,14 +283,14 @@ namespace RobCoMigrator
 					break;
 				}
 				if (er.wasFixed) {
-					++g_lastFixCount;
+					++result.fixCount;
 				}
 				parsedEntries.push_back(std::move(er.entry));
 			}
 
 			if (!lineSalvageable || parsedEntries.empty()) {
 				result.preservedLines.push_back(line);
-				++g_lastFixCount;
+				++result.fixCount;
 				continue;
 			}
 
@@ -428,7 +440,17 @@ namespace RobCoMigrator
 		csv << "TargetList_EditorID,TargetList_PluginID,InjectedForm_EditorID,InjectedForm_Name,InjectedForm_PluginID,Level,Count,ChanceNone\n";
 		for (const auto& data : a_lists) {
 			for (const auto& entry : data.entries) {
-				std::string safeName = entry.formName.empty() ? "N/A" : std::format("\"{}\"", entry.formName);
+				std::string safeName;
+				if (entry.formName.empty()) {
+					safeName = "N/A";
+				} else {
+					std::string escaped;
+					for (char c : entry.formName) {
+						if (c == '"') escaped += '"';
+						escaped += c;
+					}
+					safeName = std::format("\"{}\"", escaped);
+				}
 				csv << std::format("{},{},{},{},{},{},{},{}\n",
 								   data.listEditorID, data.listRobCoID,
 								   entry.formEditorID, safeName, entry.formRobCoID,
@@ -449,10 +471,11 @@ namespace RobCoMigrator
 		auto dataHandler = RE::TESDataHandler::GetSingleton();
 		if (!dataHandler || a_modFolderName.empty()) return -1;
 
-		fs::path targetDir = fs::path("Data") / "F4SE" / "Plugins" / "RobCo_Patcher" / "leveledList" / a_modFolderName.c_str();
+		g_modFolderName = a_modFolderName.c_str();
+		fs::path targetDir = fs::path("Data") / "F4SE" / "Plugins" / "RobCo_Patcher" / "leveledList" / g_modFolderName;
 		fs::create_directories(targetDir);
 
-		std::string playerName = GetCurrentPlayerNameRaw();
+		std::string playerName = SanitizeFilename(GetCurrentPlayerNameRaw());
 
 		auto now = std::chrono::system_clock::now();
 		auto time_t_now = std::chrono::system_clock::to_time_t(now);
@@ -486,6 +509,7 @@ namespace RobCoMigrator
 			}
 
 			parsed = ParseExistingINIFull(iniPath);
+			g_lastFixCount = parsed.fixCount;
 			std::size_t totalBefore = parsed.lists.size();
 			parsed.lists = ConsolidateByTarget(std::move(parsed.lists));
 			Log(std::format("Parsed {} filterByLLs lines from existing INI; consolidated to {} unique targets ({} preserved lines, {} total fixes).",
@@ -559,7 +583,7 @@ namespace RobCoMigrator
 
 	std::vector<PlayerFileMismatch> FindMismatchedPlayerFiles(const std::string& a_currentPlayerName) {
 		std::vector<PlayerFileMismatch> mismatches;
-		fs::path targetDir = fs::path("Data") / "F4SE" / "Plugins" / "RobCo_Patcher" / "leveledList" / kModFolderName;
+		fs::path targetDir = fs::path("Data") / "F4SE" / "Plugins" / "RobCo_Patcher" / "leveledList" / g_modFolderName;
 
 		std::error_code ec;
 		if (!fs::exists(targetDir, ec) || !fs::is_directory(targetDir, ec)) return mismatches;
@@ -587,13 +611,13 @@ namespace RobCoMigrator
 	// interaction - never from a load-game callback (the VM isn't safe to call
 	// into during kPostLoadGame).
 	RE::BSFixedString GetForeignPlayerFileWarning(std::monostate) {
-		std::string current = GetCurrentPlayerNameRaw();
-		auto mismatches = FindMismatchedPlayerFiles(current);
+		std::string currentRaw = GetCurrentPlayerNameRaw();
+		auto mismatches = FindMismatchedPlayerFiles(SanitizeFilename(currentRaw));
 		if (mismatches.empty()) return RE::BSFixedString("");
 
 		std::string body = std::format(
 			"You're playing as '{}', but the RobCo Patcher folder also contains patch file(s) belonging to other characters:\n\n",
-			current);
+			currentRaw);
 
 		for (const auto& m : mismatches) {
 			body += std::format("  - {}  (for character '{}')\n", m.filename, m.playerName);
@@ -603,10 +627,10 @@ namespace RobCoMigrator
 			"\nRobCo Patcher loads EVERY .ini file in that folder. So those other characters' injections "
 			"are being applied to your current save too - which is almost certainly not what you want.\n\n"
 			"Fix: alt-tab out and either delete those files or move them somewhere else.\n\n"
-			"Folder:\nData/F4SE/Plugins/RobCo_Patcher/leveledList/RobCoMigrator_Export/";
+			+ std::format("Folder:\nData/F4SE/Plugins/RobCo_Patcher/leveledList/{}/", g_modFolderName);
 
 		Log(std::format("Foreign-file warning surfaced: {} mismatched file(s) for current player '{}'.",
-						mismatches.size(), current));
+						mismatches.size(), currentRaw));
 
 		return RE::BSFixedString(body);
 	}

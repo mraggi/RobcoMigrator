@@ -89,3 +89,11 @@ Supported types: `section`, `text`, `spacer`/`empty`, `button`, `toggle`/`switch
 - `localtime_s` is MSVC-only; this code will not compile on GCC/Clang without a shim.
 - `MCM.psc` stub exists only so Caprica can resolve the `MCM` dependency when compiling `RobCoMigrator.psc` locally. Do not modify it.
 - The MSVC preprocessor bug in `lib/CommonLibF4/include/REX/W32/CORE.hpp` (`#if _INC_WINAPIFAMILY != 0` → `#if !defined(_INC_WINAPIFAMILY)`) is patched in CI automatically (see `build.yml`).
+
+## Behavioral Directives
+
+- **Think before coding.** State assumptions explicitly. If multiple interpretations exist, surface them rather than picking silently. If something is unclear, name what's confusing and ask.
+- **Simplicity first.** Minimum code that solves the problem. No speculative features, no abstractions for single-use code, no unrequested flexibility. If 200 lines could be 50, rewrite it.
+- **Surgical changes.** Touch only what the task requires. Don't improve adjacent code or refactor things that aren't broken. Match existing style. If you create orphaned imports/variables, remove them; don't touch pre-existing dead code unless asked.
+- **Verify before declaring done.** Define what "done" looks like before starting. For multi-step tasks, state a brief plan with a verification step for each stage. Note: this project is a Fallout 4 DLL — in-engine behavior cannot be verified here. Code changes can be checked for correctness and built, but game-side validation requires manual testing.
+- **Suggest improvements.** Proactively flag potential bugs, edge cases, or improvements when reviewing code. Discuss before writing any code.
