@@ -1,0 +1,103 @@
+// Hand-written plugin declaration that replaces CommonLibF4's auto-generated
+// res/XsePluginInfo.cpp.in. The stock template only lists the *latest* NG and
+// AE runtime constants in SetCompatibleVersions; because this plugin reads
+// engine struct fields (IsLayoutDependent), F4SE refuses to load on any
+// next-gen patch not explicitly named. We enumerate every supported runtime so
+// a single DLL loads across the whole OG/NG/AE range.
+//
+// Configured via configure_file() from CMakeLists.txt — @VAR@ tokens are
+// substituted with the COMMONLIB_PLUGIN_* / PROJECT_VERSION_* values, exactly
+// like the upstream template, so name/author/version stay CMake-authoritative.
+
+#include <F4SE/F4SE.hpp>
+
+using std::literals::operator""sv;
+
+static constexpr auto PLUGIN_NAME = "@COMMONLIB_PLUGIN_NAME@"sv;
+static constexpr auto PLUGIN_AUTHOR = "@COMMONLIB_PLUGIN_AUTHOR@"sv;
+static constexpr auto PLUGIN_VERSION = REX::Version(@PROJECT_VERSION_MAJOR@, @PROJECT_VERSION_MINOR@, @PROJECT_VERSION_PATCH@, @PROJECT_VERSION_TWEAK@);
+
+// Not yet defined by the LucaDotGit/CommonLibF4 submodule (its newest AE
+// constant is 1.11.191). Declared locally so we can list the current latest
+// Fallout 4 next-gen build without bumping the submodule.
+inline constexpr auto RUNTIME_1_11_221 = REL::CreateRuntime(1, 11, 221, 0);
+
+#if COMMONLIB_RUNTIME_NG == 1 || COMMONLIB_RUNTIME_AE == 1
+F4SE_PLUGIN_VERSION = []() consteval noexcept {
+	auto versionData = F4SE::PluginVersionData();
+
+	versionData.SetPluginName(PLUGIN_NAME);
+	versionData.SetPluginAuthor(PLUGIN_AUTHOR);
+	versionData.SetPluginVersion(PLUGIN_VERSION);
+
+	versionData.SetUseSignatureScanning(false);
+#if COMMONLIB_RUNTIME_NG == 1
+	versionData.SetUseAddressLibrary_RuntimeNG(true);
+#endif
+#if COMMONLIB_RUNTIME_AE == 1
+	versionData.SetUseAddressLibrary_RuntimeAE(true);
+#endif
+
+	versionData.SetUseNoStructs(false);
+#if COMMONLIB_RUNTIME_NG == 1
+	versionData.SetIsLayoutDependent_RuntimeNG(true);
+#endif
+#if COMMONLIB_RUNTIME_AE == 1
+	versionData.SetIsLayoutDependent_RuntimeAE(true);
+#endif
+
+	// Allowlist, not a range: every next-gen runtime we accept must be named.
+	// OG is handled separately by F4SEPlugin_Query below, so it is not listed.
+	versionData.SetCompatibleVersions(std::array{
+#if COMMONLIB_RUNTIME_NG == 1
+		F4SE::RUNTIME_1_10_980,
+		F4SE::RUNTIME_1_10_984
+#endif
+#if COMMONLIB_RUNTIME_AE == 1
+		,
+		F4SE::RUNTIME_1_11_137,
+		F4SE::RUNTIME_1_11_159,
+		F4SE::RUNTIME_1_11_169,
+		F4SE::RUNTIME_1_11_191,
+		RUNTIME_1_11_221
+#endif
+	});
+
+	return versionData;
+}();
+#endif
+
+#if COMMONLIB_RUNTIME_VR == 1 || COMMONLIB_RUNTIME_OG == 1
+F4SE_PLUGIN_QUERY(const F4SE::QueryInterface* a_f4se, F4SE::PluginInfo* a_info)
+{
+	if (!a_f4se) [[unlikely]] {
+		REX::Assert(false);
+		return false;
+	}
+
+	if (!a_info) [[unlikely]] {
+		REX::Assert(false);
+		return false;
+	}
+
+	a_info->SetPluginName(PLUGIN_NAME);
+	a_info->SetPluginVersion(PLUGIN_VERSION);
+
+	if (a_f4se->IsEditor()) {
+		return false;
+	}
+
+	const auto version = a_f4se->GetRuntimeVersion();
+#if COMMONLIB_RUNTIME_VR == 1
+	if (version == F4SE::RUNTIME_LATEST_VR) {
+		return true;
+	}
+#endif
+
+#if COMMONLIB_RUNTIME_OG == 1
+	return version == F4SE::RUNTIME_LATEST_OG;
+#else
+	return false;
+#endif
+}
+#endif

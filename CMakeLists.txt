@@ -62,6 +62,18 @@ include("${COMMONLIB_ROOT_DIR}/cmake/CopyXseOutput.cmake")
 
 generate_xse_plugin_info("${COMMONLIB_ROOT_DIR}")
 
+# Replace CommonLibF4's auto-generated plugin declaration (which lists only the
+# latest NG/AE runtime constants) with our own, which enumerates every
+# supported runtime so one DLL loads across the whole OG/NG/AE range. We still
+# use generate_xse_plugin_info above for the Win32 version resource (.rc); we
+# just substitute our cpp for ${XSE_PLUGIN_INFO_CPP_TARGET} below.
+set(PLUGIN_INFO_CPP_TARGET "${CMAKE_CURRENT_BINARY_DIR}/include/PluginInfo.cpp")
+configure_file(
+	"${CMAKE_CURRENT_SOURCE_DIR}/res/PluginInfo.cpp.in"
+	"${PLUGIN_INFO_CPP_TARGET}"
+	@ONLY
+)
+
 file(
 	GLOB_RECURSE
 		SOURCES
@@ -86,7 +98,7 @@ source_group(
 	TREE
 		"${CMAKE_CURRENT_BINARY_DIR}/include"
 	FILES
-		"${XSE_PLUGIN_INFO_CPP_TARGET}"
+		"${PLUGIN_INFO_CPP_TARGET}"
 )
 
 # --- Include ---
@@ -99,7 +111,7 @@ add_library(
 	"${PROJECT_NAME}"
 	SHARED
 		${SOURCES}
-		"${XSE_PLUGIN_INFO_CPP_TARGET}"
+		"${PLUGIN_INFO_CPP_TARGET}"
 		"${WIN32_VERSION_TARGET}"
 )
 
