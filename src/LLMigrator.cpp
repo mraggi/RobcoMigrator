@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <cctype>
+#include <excpt.h>  // EXCEPTION_EXECUTE_HANDLER (MSVC SEH guard in ScanLeveledLists)
 
 namespace fs = std::filesystem;
 
@@ -328,42 +329,78 @@ namespace RobCoMigrator
 		return result;
 	}
 
+	// Reads the script-added entries of a single leveled list. This is the only place
+	// we chase pointers that other mods inject at runtime (entry->form), so it is also
+	// the only place that can fault: an injected entry can point at a stale/dangling
+	// TESForm (e.g. a mod-edited override, a partial save state, or an NG+ reset). A
+	// plain "entry->form != nullptr" check does NOT catch a dangling pointer - we only
+	// find out it's bad once we dereference it, which is too late. See ScanOneListGuarded.
+	static bool ScanOneListImpl(RE::TESLevItem* a_listForm, TargetListData* a_out) {
+		a_out->listEditorID = GetEditorID(a_listForm);
+		a_out->listRobCoID = GetRobCoID(a_listForm);
+
+		for (std::uint8_t i = 0; i < a_listForm->scriptListCount; ++i) {
+			auto entry = a_listForm->scriptAddedLists[i];
+			if (!entry || !entry->form) continue;
+
+			InjectionEntry inj;
+			inj.formRobCoID = GetRobCoID(entry->form);
+			inj.formEditorID = GetEditorID(entry->form);
+			inj.formName = GetFullName(entry->form);
+			inj.level = entry->level;
+			inj.count = entry->count;
+			inj.chanceNone = entry->chanceNone;
+
+			std::string itemDisplay = inj.formEditorID;
+			if (!inj.formName.empty()) {
+				itemDisplay += std::format(" (\"{}\")", inj.formName);
+			}
+			inj.commentBlock = std::format("//     ╰─ [Lvl {}] {}\n", inj.level, itemDisplay);
+
+			a_out->entries.push_back(std::move(inj));
+		}
+		return true;
+	}
+
+	// SEH guard around ScanOneListImpl. If a list holds a dangling injected form,
+	// dereferencing it raises an access violation; we catch it, skip just that list,
+	// and keep going instead of crashing the whole game. This frame deliberately holds
+	// no C++ objects that need unwinding, so __try is legal here (avoids C2712).
+	static bool ScanOneListGuarded(RE::TESLevItem* a_listForm, TargetListData* a_out) noexcept {
+		__try {
+			return ScanOneListImpl(a_listForm, a_out);
+		} __except (EXCEPTION_EXECUTE_HANDLER) {
+			return false;
+		}
+	}
+
 	std::vector<TargetListData> ScanLeveledLists() {
 		std::vector<TargetListData> scanned;
 		auto dataHandler = RE::TESDataHandler::GetSingleton();
 		if (!dataHandler) return scanned;
 
+		int skipped = 0;
 		for (auto listForm : dataHandler->GetFormArray<RE::TESLevItem>()) {
 			if (!listForm || listForm->scriptListCount <= 0 || !listForm->scriptAddedLists) continue;
 
 			TargetListData listData;
-			listData.listEditorID = GetEditorID(listForm);
-			listData.listRobCoID = GetRobCoID(listForm);
-
-			for (std::uint8_t i = 0; i < listForm->scriptListCount; ++i) {
-				auto entry = listForm->scriptAddedLists[i];
-				if (!entry || !entry->form) continue;
-
-				InjectionEntry inj;
-				inj.formRobCoID = GetRobCoID(entry->form);
-				inj.formEditorID = GetEditorID(entry->form);
-				inj.formName = GetFullName(entry->form);
-				inj.level = entry->level;
-				inj.count = entry->count;
-				inj.chanceNone = entry->chanceNone;
-
-				std::string itemDisplay = inj.formEditorID;
-				if (!inj.formName.empty()) {
-					itemDisplay += std::format(" (\"{}\")", inj.formName);
-				}
-				inj.commentBlock = std::format("//     ╰─ [Lvl {}] {}\n", inj.level, itemDisplay);
-
-				listData.entries.push_back(std::move(inj));
+			if (!ScanOneListGuarded(listForm, &listData)) {
+				++skipped;
+				Log(std::format("WARNING: Skipped leveled list '{}' - access violation while reading its "
+								"script-added entries (likely a dangling/invalid injected form left by another mod). "
+								"scriptListCount={}. This list was not migrated; everything else continues normally.",
+								GetEditorID(listForm), static_cast<int>(listForm->scriptListCount)));
+				continue;
 			}
 
 			if (!listData.entries.empty()) {
 				scanned.push_back(std::move(listData));
 			}
+		}
+
+		if (skipped > 0) {
+			Log(std::format("Scan finished with {} leveled list(s) skipped due to bad injected data. "
+							"The rest were migrated normally.", skipped));
 		}
 		return scanned;
 	}
