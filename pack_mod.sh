@@ -21,6 +21,9 @@ mkdir -p "Data/MCM/Config/$MOD_NAME"
 # 3. Compile Papyrus and distribute script files
 cd src
 caprica.sh RobCoMigrator.psc
+# Caprica bakes the build machine's user/computer name and absolute source path
+# into the .pex header; strip them before the pex is copied anywhere.
+python3 ../strip_pex_metadata.py RobCoMigrator.pex
 cp RobCoMigrator.pex "$MOD_DIR/Scripts/"
 cp RobCoMigrator.psc "$MOD_DIR/Scripts/Source/User/"
 mv RobCoMigrator.pex ../Data/Scripts/
