@@ -48,6 +48,7 @@ cp "build/Release/RobCoMigrator.dll" "$LOCAL_OUT_DIR/RobCoMigrator.dll"
 if [ -n "${MOD_DIR}" ]; then
     mkdir -p "$MOD_DIR/F4SE/Plugins"
     cp "$LOCAL_OUT_DIR/RobCoMigrator.dll" "$MOD_DIR/F4SE/Plugins/"
+    rm -f "$HOME/.local/share/fluorine/vfs_cache/"*.vfscache 2>/dev/null || true
 fi
 
 echo "Build complete! DLL at $LOCAL_OUT_DIR/RobCoMigrator.dll"

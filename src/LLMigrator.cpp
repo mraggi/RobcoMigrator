@@ -38,11 +38,17 @@ namespace RobCoMigrator
 		}
 	}
 
+	std::string GetRobCoID(RE::TESForm* a_form);  // defined below; used as the no-EditorID fallback
+
 	std::string GetEditorID(RE::TESForm* a_form) {
 		if (!a_form) return "UNKNOWN";
 		const char* edID = a_form->GetFormEditorID();
 		if (edID && edID[0] != '\0') return std::string(edID);
-		return std::format("{:08X}", a_form->GetFormID());
+		// No EditorID available (e.g. our hooks didn't load it and Hydra isn't
+		// present). Fall back to the same Plugin|LocalID we'd write to the patch
+		// rather than the full {:08X} FormID, so comments/CSV stay load-order
+		// stable and match the filterByLLs/addToLLs lines.
+		return GetRobCoID(a_form);
 	}
 
 	std::string GetFullName(RE::TESForm* a_form) {
@@ -78,6 +84,21 @@ namespace RobCoMigrator
 		} else {
 			return std::format("{}|{:X}", pluginName, formID & 0xFFFFFF);
 		}
+	}
+
+	// RobCo Patcher doesn't need leading zeros in the local form ID (e.g.
+	// "RPD.esp|00B9E7" and "RPD.esp|B9E7" are equivalent), and they're ugly.
+	// Live-scanned IDs already come out clean (GetRobCoID uses {:X}); this
+	// strips leading zeros from IDs read back out of existing .ini files - which
+	// older versions of this plugin zero-padded - so re-saving cleans them up.
+	std::string NormalizeRobCoID(const std::string& a_robCoID) {
+		auto pos = a_robCoID.find('|');
+		if (pos == std::string::npos) return a_robCoID;
+		std::string plugin = a_robCoID.substr(0, pos);
+		std::string id = a_robCoID.substr(pos + 1);
+		std::size_t firstNonZero = id.find_first_not_of('0');
+		id = (firstNonZero == std::string::npos) ? "0" : id.substr(firstNonZero);
+		return plugin + "|" + id;
 	}
 
 	RE::TESForm* LookupFormByRobCoID(const std::string& a_robCoID) {

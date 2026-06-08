@@ -17,13 +17,15 @@ The plugin has two parts:
 ### Local build via Windows VM (preferred)
 
 ```bash
+./build_psc.sh                  # compiles Papyrus (Caprica) → stages scripts + MCM config into Data/
 ./build_on_virtual_machine.sh   # builds DLL on VM → build/Release/RobCoMigrator.dll
-./build_mod.sh                  # compiles Papyrus + packages → RobCo Migrator.zip
-# or both at once:
-./build_all.sh
+./build_all.sh                  # runs both of the above (Papyrus, then DLL)
+./pack_mod.sh                   # runs build_all.sh, then packages everything → RobCo Migrator.zip
 ```
 
-`build_on_virtual_machine.sh` SSHes to `Builder@192.168.122.204`, syncs `src/` and CMake files on every run, and syncs `lib/CommonLibF4` only on the first run. The DLL is fetched to `build/Release/` (so `build_mod.sh` finds it) and `build_output/`. Set the optional `MOD_DIR` variable in that script to auto-install into an MO2 mod folder after each build. It has no password, so you can log in and do stuff on the virtual machine.
+The split mirrors BaseNPCSwapper: `build_psc.sh` (Papyrus only), `build_on_virtual_machine.sh` (DLL only), `build_all.sh` (both), `pack_mod.sh` (build_all + zip). Each of `build_psc.sh` and `build_on_virtual_machine.sh` also installs its outputs into the live `MOD_DIR` (set near the top of each script) for in-game testing.
+
+`build_on_virtual_machine.sh` SSHes to `Builder@192.168.122.204`, syncs `src/` and CMake files on every run, and syncs `lib/CommonLibF4` only on the first run. The DLL is fetched to `build/Release/` (so `pack_mod.sh` finds it) and `build_output/`. It has no password, so you can log in and do stuff on the virtual machine.
 
 ### CI (GitHub Actions)
 
