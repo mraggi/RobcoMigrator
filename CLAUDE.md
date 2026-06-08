@@ -23,7 +23,7 @@ The plugin has two parts:
 ./build_all.sh
 ```
 
-`build_on_virtual_machine.sh` SSHes to `Builder@192.168.122.204`, syncs `src/` and CMake files on every run, and syncs `lib/CommonLibF4` only on the first run. The DLL is fetched to `build/Release/` (so `build_mod.sh` finds it) and `build_output/`. Set the optional `MOD_DIR` variable in that script to auto-install into an MO2 mod folder after each build.
+`build_on_virtual_machine.sh` SSHes to `Builder@192.168.122.204`, syncs `src/` and CMake files on every run, and syncs `lib/CommonLibF4` only on the first run. The DLL is fetched to `build/Release/` (so `build_mod.sh` finds it) and `build_output/`. Set the optional `MOD_DIR` variable in that script to auto-install into an MO2 mod folder after each build. It has no password, so you can log in and do stuff on the virtual machine.
 
 ### CI (GitHub Actions)
 

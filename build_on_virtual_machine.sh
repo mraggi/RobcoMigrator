@@ -19,13 +19,13 @@ VM_IP="192.168.122.204"
 VM_DIR_SCP="C:/actions-runner/_work/RobCoMigrator/RobCoMigrator"
 LOCAL_OUT_DIR="./build_output"
 # Optional: set to your MO2 mod path to auto-install after building
-MOD_DIR="/home/mraggi/Fast/SteamLibrary/steamapps/compatdata/377160/pfx/drive_c/users/steamuser/AppData/Local/ModOrganizer/Fallout 4/mods/RobCo Migrator"
+MOD_DIR="/home/mraggi/Fast/Fluorine/mods/RobCo Migrator"
 
 echo "Setting up VM directory..."
 ssh $VM_USER@$VM_IP 'if not exist C:\actions-runner\_work\RobCoMigrator\RobCoMigrator mkdir C:\actions-runner\_work\RobCoMigrator\RobCoMigrator'
 
 echo "Syncing source files to Windows VM..."
-scp -pr ./src ./CMakeLists.txt ./CMakePresets.json ./vcpkg.json $VM_USER@$VM_IP:"$VM_DIR_SCP/"
+scp -pr ./src ./res ./CMakeLists.txt ./CMakePresets.json ./vcpkg.json $VM_USER@$VM_IP:"$VM_DIR_SCP/"
 
 # Sync CommonLibF4 only on the first run — it doesn't change between builds
 if ! ssh $VM_USER@$VM_IP 'dir C:\actions-runner\_work\RobCoMigrator\RobCoMigrator\lib\CommonLibF4\CMakeLists.txt' >/dev/null 2>&1; then

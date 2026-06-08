@@ -5,7 +5,7 @@ set -e
 
 MOD_NAME="RobCo Migrator"
 ZIP_NAME="${MOD_NAME}.zip"
-MOD_DIR="/home/mraggi/Fast/SteamLibrary/steamapps/compatdata/377160/pfx/drive_c/users/steamuser/AppData/Local/ModOrganizer/Fallout 4/mods/RobCo Migrator"
+MOD_DIR="/home/mraggi/Fast/Fluorine/mods/RobCo Migrator"
 
 echo "=== Starting Build & Packaging for $MOD_NAME ==="
 
