@@ -354,6 +354,12 @@ namespace RobCoMigrator
 		return result;
 	}
 
+	// Collapses an existing file's multiple lines for the same target onto one
+	// line. We do NOT dedup entries here: a leveled list can intentionally list
+	// the same item several times to weight its drop chance, and RobCo Patcher
+	// already applies every line additively, so concatenating preserves the
+	// file's exact in-game effect. The only place we drop anything is the
+	// scan-vs-file step in MergeScanIntoExisting.
 	std::vector<TargetListData> ConsolidateByTarget(std::vector<TargetListData> a_lists) {
 		std::unordered_map<std::string, std::size_t> indexOf;
 		std::vector<TargetListData> result;
@@ -366,13 +372,9 @@ namespace RobCoMigrator
 				result.push_back(std::move(list));
 			} else {
 				auto& dest = result[it->second];
-				std::unordered_set<std::string> haveIDs;
-				for (const auto& e : dest.entries) haveIDs.insert(e.formRobCoID);
-				for (auto& e : list.entries) {
-					if (haveIDs.insert(e.formRobCoID).second) {
-						dest.entries.push_back(std::move(e));
-					}
-				}
+				dest.entries.insert(dest.entries.end(),
+					std::make_move_iterator(list.entries.begin()),
+					std::make_move_iterator(list.entries.end()));
 			}
 		}
 		return result;
@@ -467,10 +469,18 @@ namespace RobCoMigrator
 				a_existing.push_back(scanList);
 			} else {
 				auto& dest = a_existing[it->second];
-				std::unordered_set<std::string> haveIDs;
-				for (const auto& e : dest.entries) haveIDs.insert(e.formRobCoID);
+				// Per-form count reconciliation: the result keeps max(file, scan)
+				// copies of each form. Duplicate entries are intentional leveled-
+				// list weighting, so we never trim what's already in the file; we
+				// only top it up with the scan's surplus. A form the scan sees no
+				// more often than the file already lists adds nothing (lists weren't
+				// reverted before re-running, or it's a test pass); a form the scan
+				// sees 3x while the file has 2x adds 1; a brand-new form adds all.
+				std::unordered_map<std::string, int> fileCount;
+				for (const auto& e : dest.entries) ++fileCount[e.formRobCoID];
+				std::unordered_map<std::string, int> seen;
 				for (const auto& e : scanList.entries) {
-					if (haveIDs.insert(e.formRobCoID).second) {
+					if (++seen[e.formRobCoID] > fileCount[e.formRobCoID]) {
 						dest.entries.push_back(e);
 					}
 				}
