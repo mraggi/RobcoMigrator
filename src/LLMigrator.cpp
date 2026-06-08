@@ -134,14 +134,37 @@ namespace RobCoMigrator
 		return a_fallbackTimestamp;
 	}
 
-	std::string GetCurrentPlayerNameRaw() {
-		std::string playerName = "Player";
-		if (auto player = RE::PlayerCharacter::GetSingleton()) {
-			auto displayName = player->GetDisplayName();
-			if (displayName && !displayName->empty()) {
-				playerName = displayName->c_str();
-			}
+	// Reads the player's name off the base actor. We deliberately do NOT call
+	// TESObjectREFR::GetDisplayName() - its ExtraTextDisplayData engine routine
+	// faults on this runtime (a dangling extra-data pointer in NG+ saves). The
+	// player's chosen name lives in TESFullName's sparse map, not the static
+	// `fullName` member, so we use the map-aware static GetFormFullName()
+	// accessor - the same path GetDisplayName() itself falls back to. Guarded
+	// because a stale base pointer could still fault - see ScanOneListGuarded.
+	static void GetPlayerNameImpl(RE::PlayerCharacter* a_player, std::string* a_out) {
+		auto* base = a_player->GetBaseObject();
+		if (!base) return;
+		auto fullName = RE::TESFullName::GetFormFullName(base);
+		if (fullName && !fullName->empty()) *a_out = fullName->c_str();
+	}
+
+	// SEH guard around GetPlayerNameImpl. Holds no C++ objects needing unwinding,
+	// so __try is legal here (avoids C2712) - see ScanOneListGuarded.
+	static bool GetPlayerNameGuarded(RE::PlayerCharacter* a_player, std::string* a_out) noexcept {
+		__try {
+			GetPlayerNameImpl(a_player, a_out);
+			return true;
+		} __except (EXCEPTION_EXECUTE_HANDLER) {
+			return false;
 		}
+	}
+
+	std::string GetCurrentPlayerNameRaw() {
+		std::string playerName;
+		if (auto player = RE::PlayerCharacter::GetSingleton()) {
+			GetPlayerNameGuarded(player, &playerName);
+		}
+		if (playerName.empty()) playerName = "Player";
 		return playerName;
 	}
 
@@ -221,7 +244,10 @@ namespace RobCoMigrator
 			return result;
 		}
 
-		std::string robCoID = parts[0];
+		// Strip any leading zeros older versions wrote (e.g. "Plugin|00B9E7" ->
+		// "Plugin|B9E7"). Silent cleanup - not counted as a fix - and it also lets
+		// these old entries dedup against freshly-scanned IDs, which never pad.
+		std::string robCoID = NormalizeRobCoID(parts[0]);
 		std::int32_t level = 1, count = 1, chanceNone = 0;
 
 		auto parseField = [&result](const std::string& s, std::int32_t defaultVal) -> std::int32_t {
@@ -287,7 +313,7 @@ namespace RobCoMigrator
 				continue;
 			}
 
-			std::string targetRobCoID = matches[1].str();
+			std::string targetRobCoID = NormalizeRobCoID(matches[1].str());
 			std::string entriesStr = matches[2].str();
 
 			std::vector<InjectionEntry> parsedEntries;
@@ -359,29 +385,20 @@ namespace RobCoMigrator
 	// plain "entry->form != nullptr" check does NOT catch a dangling pointer - we only
 	// find out it's bad once we dereference it, which is too late. See ScanOneListGuarded.
 	static bool ScanOneListImpl(RE::TESLevItem* a_listForm, TargetListData* a_out) {
-		Log(std::format("[DBG] ScanOneListImpl: entry, listForm={:X}, scriptListCount={}",
-			reinterpret_cast<uintptr_t>(a_listForm), static_cast<int>(a_listForm->scriptListCount)));
 		a_out->listEditorID = GetEditorID(a_listForm);
 		a_out->listRobCoID = GetRobCoID(a_listForm);
-		Log(std::format("[DBG] ScanOneListImpl: list='{}' ({})", a_out->listEditorID, a_out->listRobCoID));
 
 		for (std::uint8_t i = 0; i < a_listForm->scriptListCount; ++i) {
 			auto entry = a_listForm->scriptAddedLists[i];
-			Log(std::format("[DBG] ScanOneListImpl: entry[{}] ptr={:X}, form={}",
-				i, reinterpret_cast<uintptr_t>(entry), entry ? std::format("{:X}", reinterpret_cast<uintptr_t>(entry->form)) : "null entry"));
 			if (!entry || !entry->form) continue;
 
 			InjectionEntry inj;
-			Log(std::format("[DBG] ScanOneListImpl: entry[{}] getting RobCoID", i));
 			inj.formRobCoID = GetRobCoID(entry->form);
-			Log(std::format("[DBG] ScanOneListImpl: entry[{}] getting EditorID", i));
 			inj.formEditorID = GetEditorID(entry->form);
-			Log(std::format("[DBG] ScanOneListImpl: entry[{}] getting FullName", i));
 			inj.formName = GetFullName(entry->form);
 			inj.level = entry->level;
 			inj.count = entry->count;
 			inj.chanceNone = entry->chanceNone;
-			Log(std::format("[DBG] ScanOneListImpl: entry[{}] form='{}' level={} count={}", i, inj.formEditorID, inj.level, inj.count));
 
 			std::string itemDisplay = inj.formEditorID;
 			if (!inj.formName.empty()) {
@@ -391,7 +408,6 @@ namespace RobCoMigrator
 
 			a_out->entries.push_back(std::move(inj));
 		}
-		Log(std::format("[DBG] ScanOneListImpl: done, {} entries collected", a_out->entries.size()));
 		return true;
 	}
 
@@ -408,25 +424,13 @@ namespace RobCoMigrator
 	}
 
 	std::vector<TargetListData> ScanLeveledLists() {
-		Log("[DBG] ScanLeveledLists: entry");
 		std::vector<TargetListData> scanned;
 		auto dataHandler = RE::TESDataHandler::GetSingleton();
-		Log(std::format("[DBG] ScanLeveledLists: dataHandler={}", dataHandler ? "valid" : "null"));
 		if (!dataHandler) return scanned;
 
-		auto& formArray = dataHandler->GetFormArray<RE::TESLevItem>();
-		Log(std::format("[DBG] ScanLeveledLists: total TESLevItem count={}", formArray.size()));
-
 		int skipped = 0;
-		int idx = 0;
-		for (auto listForm : formArray) {
-			if (!listForm || listForm->scriptListCount <= 0 || !listForm->scriptAddedLists) {
-				++idx;
-				continue;
-			}
-
-			Log(std::format("[DBG] ScanLeveledLists: scanning list[{}] ptr={:X} scriptListCount={}",
-				idx, reinterpret_cast<uintptr_t>(listForm), static_cast<int>(listForm->scriptListCount)));
+		for (auto listForm : dataHandler->GetFormArray<RE::TESLevItem>()) {
+			if (!listForm || listForm->scriptListCount <= 0 || !listForm->scriptAddedLists) continue;
 
 			TargetListData listData;
 			if (!ScanOneListGuarded(listForm, &listData)) {
@@ -435,17 +439,14 @@ namespace RobCoMigrator
 								"script-added entries (likely a dangling/invalid injected form left by another mod). "
 								"scriptListCount={}. This list was not migrated; everything else continues normally.",
 								GetEditorID(listForm), static_cast<int>(listForm->scriptListCount)));
-				++idx;
 				continue;
 			}
 
 			if (!listData.entries.empty()) {
 				scanned.push_back(std::move(listData));
 			}
-			++idx;
 		}
 
-		Log(std::format("[DBG] ScanLeveledLists: done. {} lists collected, {} skipped", scanned.size(), skipped));
 		if (skipped > 0) {
 			Log(std::format("Scan finished with {} leveled list(s) skipped due to bad injected data. "
 							"The rest were migrated normally.", skipped));
@@ -546,27 +547,21 @@ namespace RobCoMigrator
 
 	std::int32_t GeneratePatch(std::monostate, RE::BSFixedString a_modFolderName) {
 		Log("GeneratePatch triggered.");
-		Log(std::format("[DBG] GeneratePatch: modFolderName='{}'", a_modFolderName.empty() ? "(empty)" : a_modFolderName.c_str()));
 		g_lastFixCount = 0;
 
 		if (g_bSafeToRevert) {
 			Log("GeneratePatch blocked - user already generated a patch this session.");
 			return 2;
 		}
-		Log("[DBG] GeneratePatch: g_bSafeToRevert check passed");
 
 		auto dataHandler = RE::TESDataHandler::GetSingleton();
-		Log(std::format("[DBG] GeneratePatch: dataHandler={}", dataHandler ? "valid" : "null"));
 		if (!dataHandler || a_modFolderName.empty()) return -1;
 
 		g_modFolderName = a_modFolderName.c_str();
 		fs::path targetDir = fs::path("Data") / "F4SE" / "Plugins" / "RobCo_Patcher" / "leveledList" / g_modFolderName;
-		Log(std::format("[DBG] GeneratePatch: targetDir='{}'", targetDir.string()));
 		fs::create_directories(targetDir);
-		Log("[DBG] GeneratePatch: directories created");
 
 		std::string playerName = SanitizeFilename(GetCurrentPlayerNameRaw());
-		Log(std::format("[DBG] GeneratePatch: playerName='{}'", playerName));
 
 		auto now = std::chrono::system_clock::now();
 		auto time_t_now = std::chrono::system_clock::to_time_t(now);
@@ -586,11 +581,10 @@ namespace RobCoMigrator
 
 		fs::path iniPath = targetDir / std::format("{}.ini", baseNameINI);
 		fs::path csvPath = targetDir / std::format("{}.csv", baseNameCSV);
-		Log(std::format("[DBG] GeneratePatch: iniPath='{}', csvPath='{}'", iniPath.string(), csvPath.string()));
 
 		ParsedFile parsed;
-		if (fs::exists(iniPath)) {
-			Log("[DBG] GeneratePatch: existing INI found, backing up");
+		bool hadExistingFile = fs::exists(iniPath);
+		if (hadExistingFile) {
 			std::string oldTimestamp = GetFileHeaderTimestamp(iniPath, fileTimestamp);
 			fs::path backupPath = targetDir / std::format("{}_{}.bak", baseNameINI, oldTimestamp);
 			try {
@@ -601,38 +595,32 @@ namespace RobCoMigrator
 				return -1;
 			}
 
-			Log("[DBG] GeneratePatch: parsing existing INI");
 			parsed = ParseExistingINIFull(iniPath);
 			g_lastFixCount = parsed.fixCount;
 			std::size_t totalBefore = parsed.lists.size();
 			parsed.lists = ConsolidateByTarget(std::move(parsed.lists));
 			Log(std::format("Parsed {} filterByLLs lines from existing INI; consolidated to {} unique targets ({} preserved lines, {} total fixes).",
 							totalBefore, parsed.lists.size(), parsed.preservedLines.size(), g_lastFixCount));
-		} else {
-			Log("[DBG] GeneratePatch: no existing INI, starting fresh");
 		}
 
-		Log("[DBG] GeneratePatch: about to ScanLeveledLists");
 		auto scanned = ScanLeveledLists();
 		Log(std::format("Scanned {} target lists with dynamic injections.", scanned.size()));
 
-		Log("[DBG] GeneratePatch: merging scan into existing");
 		auto merged = MergeScanIntoExisting(std::move(parsed.lists), scanned);
 		std::erase_if(merged, [](const TargetListData& l) { return l.entries.empty(); });
-		Log(std::format("[DBG] GeneratePatch: merged result: {} lists", merged.size()));
 
-		if (merged.empty() && parsed.preservedLines.empty()) {
-			Log("Nothing to write - no existing entries and no live injections.");
+		// Only bail when there's genuinely nothing on disk and nothing to add. If a
+		// file already exists we always rewrite it - even with no live injections -
+		// so older files get cleaned up (leading zeros stripped, header/comments
+		// rebuilt) just by running a scan.
+		if (merged.empty() && parsed.preservedLines.empty() && !hadExistingFile) {
+			Log("Nothing to write - no existing file and no live injections.");
 			return 0;
 		}
 
-		Log("[DBG] GeneratePatch: sorting lists");
 		SortLists(merged);
-		Log("[DBG] GeneratePatch: about to WriteINI");
 		WriteINI(iniPath, merged, parsed.preservedLines, displayTimestamp);
-		Log("[DBG] GeneratePatch: INI written, about to WriteCSV");
 		WriteCSV(csvPath, merged);
-		Log("[DBG] GeneratePatch: CSV written");
 
 		Log(std::format("Smart merge complete. {} target lists written; {} auto-fixes.", merged.size(), g_lastFixCount));
 		g_bSafeToRevert = true;
@@ -651,10 +639,8 @@ namespace RobCoMigrator
 	}
 
 	std::vector<RE::TESForm*> GetInjectedLists(std::monostate) {
-		Log("[DBG] GetInjectedLists: entry");
 		std::vector<RE::TESForm*> result;
 		auto dataHandler = RE::TESDataHandler::GetSingleton();
-		Log(std::format("[DBG] GetInjectedLists: dataHandler={}", dataHandler ? "valid" : "null"));
 		if (!dataHandler) return result;
 
 		for (auto listForm : dataHandler->GetFormArray<RE::TESLevItem>()) {
@@ -662,7 +648,6 @@ namespace RobCoMigrator
 				result.push_back(listForm);
 			}
 		}
-		Log(std::format("[DBG] GetInjectedLists: found {} lists with scriptListCount>0", result.size()));
 
 		g_bSafeToRevert = false;
 		g_bUserUnlockedRevert = false;

@@ -74,6 +74,15 @@ Git submodule. Provides `RE::` and `F4SE::` namespaces (Fallout 4 reverse-engine
 - `COMMONLIB_OPTION_FMT = ON` (ships `{fmt}`)
 - vcpkg also provides `spdlog` and `fmt` (see `vcpkg.json`)
 
+### Logs & Debugging (live test machine)
+
+The plugin writes its own log to F4SE's log directory (`F4SE::GetLogDirectoryPath()` → `Documents/My Games/Fallout4/F4SE/`), **not** under `Data/`. On this dev machine the live game runs through a Wine/Proton prefix, so the readable paths are:
+
+- **Plugin log:** `/home/mraggi/Fast/Fluorine/prefixes/pfx/drive_c/users/steamuser/My Documents/My Games/Fallout4/F4SE/RobCoMigrator.log`
+- **Crash logs:** same folder, `crash-<timestamp>.log` (written by Addictol Crash Logger). The most recent one matches the crash you're investigating.
+
+`Log()` is defined in `LLMigrator.cpp`. It must not be called before `F4SE::Init()` (which is what populates the log directory path). When chasing a crash, the established technique is to sprinkle verbose `Log("[DBG] ...")` lines through every step (prefix kept greppable so they're trivial to strip afterwards): a missing `[DBG]` line in the output tells you which step faulted. These are added on demand and removed once the bug is found, so the committed code normally has none.
+
 ### MCM config.json Format
 
 `src/config.json` defines the Mod Configuration Menu layout. Key rules:
@@ -99,3 +108,4 @@ Supported types: `section`, `text`, `spacer`/`empty`, `button`, `toggle`/`switch
 - **Surgical changes.** Touch only what the task requires. Don't improve adjacent code or refactor things that aren't broken. Match existing style. If you create orphaned imports/variables, remove them; don't touch pre-existing dead code unless asked.
 - **Verify before declaring done.** Define what "done" looks like before starting. For multi-step tasks, state a brief plan with a verification step for each stage. Note: this project is a Fallout 4 DLL — in-engine behavior cannot be verified here. Code changes can be checked for correctness and built, but game-side validation requires manual testing.
 - **Suggest improvements.** Proactively flag potential bugs, edge cases, or improvements when reviewing code. Discuss before writing any code.
+- **Use modern CLI tools.** Prefer `rg` (ripgrep) over `grep`, `fd` over `find`, and `sd` over `sed` for search-and-replace, plus other modern equivalents (`bat`, `eza`, …) when they fit. They're installed and faster; fall back to the classic tool only if a modern one isn't available or doesn't fit the task.

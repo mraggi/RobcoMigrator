@@ -139,7 +139,6 @@ namespace RobCoMigrator::EditorIDLoader
 
 		using namespace detail;
 
-		Log("[DBG] EditorIDLoader: batch 1/8 - BGS/TES base forms");
 		Hook<RE::BGSTransform>::Install();
 		Hook<RE::BGSComponent>::Install();
 		Hook<RE::BGSTextureSet>::Install();
@@ -155,7 +154,6 @@ namespace RobCoMigrator::EditorIDLoader
 		Hook<RE::SpellItem>::Install();
 		Hook<RE::ScrollItem>::Install();
 
-		Log("[DBG] EditorIDLoader: batch 2/8 - TESObject world items");
 		Hook<RE::TESObjectACTI>::Install();
 		Hook<RE::BGSTalkingActivator>::Install();
 		Hook<RE::TESObjectARMO>::Install();
@@ -173,7 +171,6 @@ namespace RobCoMigrator::EditorIDLoader
 		Hook<RE::TESFlora>::Install();
 		Hook<RE::TESFurniture>::Install();
 
-		Log("[DBG] EditorIDLoader: batch 3/8 - weapons, ammo, NPCs, leveled lists");
 		Hook<RE::TESObjectWEAP>::Install();
 		Hook<RE::TESAmmo>::Install();
 		Hook<RE::TESNPC>::Install();
@@ -190,7 +187,6 @@ namespace RobCoMigrator::EditorIDLoader
 		Hook<RE::BGSTerminal>::Install();
 		Hook<RE::TESLevItem>::Install();
 
-		Log("[DBG] EditorIDLoader: batch 4/8 - weather, climate, FX");
 		Hook<RE::TESWeather>::Install();
 		Hook<RE::TESClimate>::Install();
 		Hook<RE::BGSShaderParticleGeometryData>::Install();
@@ -198,7 +194,6 @@ namespace RobCoMigrator::EditorIDLoader
 		Hook<RE::TESRegion>::Install();
 		Hook<RE::Explosion>::Install();
 
-		Log("[DBG] EditorIDLoader: batch 5/8 - projectiles and actors");
 		Hook<RE::Projectile>::Install();
 		Hook<RE::Actor>::Install();
 		Hook<RE::PlayerCharacter>::Install();
@@ -211,7 +206,6 @@ namespace RobCoMigrator::EditorIDLoader
 		Hook<RE::BarrierProjectile>::Install();
 		Hook<RE::Hazard>::Install();
 
-		Log("[DBG] EditorIDLoader: batch 6/8 - AI packages, dialogue");
 		Hook<RE::TESTopicInfo>::Install();
 		Hook<RE::TESPackage>::Install();
 		Hook<RE::AlarmPackage>::Install();
@@ -228,7 +222,6 @@ namespace RobCoMigrator::EditorIDLoader
 		Hook<RE::BGSDebris>::Install();
 		Hook<RE::TESImageSpace>::Install();
 
-		Log("[DBG] EditorIDLoader: batch 7/8 - BGS gameplay forms");
 		Hook<RE::BGSListForm>::Install();
 		Hook<RE::BGSPerk>::Install();
 		Hook<RE::BGSBodyPartData>::Install();
@@ -259,7 +252,6 @@ namespace RobCoMigrator::EditorIDLoader
 		Hook<RE::BGSMovementType>::Install();
 		Hook<RE::BGSDualCastData>::Install();
 
-		Log("[DBG] EditorIDLoader: batch 8/8 - audio, mods, misc BGS forms");
 		Hook<RE::BGSSoundCategory>::Install();
 		Hook<RE::BGSSoundOutput>::Install();
 		Hook<RE::BGSCollisionLayer>::Install();

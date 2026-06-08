@@ -17,13 +17,10 @@ namespace {
 
         switch (a_msg->GetType()) {
         case F4SE::MessagingInterface::MessageType::kPostLoad:
-            RobCoMigrator::Log("[DBG] MessageCallback: kPostLoad - calling InstallIfNeeded");
             RobCoMigrator::EditorIDLoader::InstallIfNeeded();
-            RobCoMigrator::Log("[DBG] MessageCallback: kPostLoad done");
             break;
 
         case F4SE::MessagingInterface::MessageType::kGameDataReady:
-            RobCoMigrator::Log("[DBG] MessageCallback: kGameDataReady - probing EditorIDs");
             if (RobCoMigrator::EditorIDLoader::IsWorking()) {
                 RobCoMigrator::Log("[EditorIDLoader] EditorID probe SUCCESS "
                                    "('LL_Vendor_Weapon_GunSpecialty' resolved). EditorIDs are available.");
@@ -35,24 +32,18 @@ namespace {
             break;
 
         default:
-            RobCoMigrator::Log(std::format("[DBG] MessageCallback: unhandled message type={}", static_cast<int>(a_msg->GetType())));
             break;
         }
     }
 }
 
 extern "C" DLLEXPORT bool F4SEPlugin_Load(const F4SE::LoadInterface* a_f4se) {
+    // F4SE::Init() must run first: it populates F4SE::GetLogDirectoryPath(),
+    // which RobCoMigrator::Log() depends on. Never call Log() before this.
     F4SE::Init(a_f4se);
-    // Log() uses F4SE::GetLogDirectoryPath(), which is set during F4SE::Init() above.
-    // Never call Log() before this point.
-    RobCoMigrator::Log("[DBG] F4SEPlugin_Load: F4SE::Init done");
 
     F4SE::GetMessagingInterface()->RegisterListener(MessageCallback);
-    RobCoMigrator::Log("[DBG] F4SEPlugin_Load: messaging listener registered");
-
     F4SE::GetPapyrusInterface()->Register(RobCoMigrator::RegisterPapyrus);
-    RobCoMigrator::Log("[DBG] F4SEPlugin_Load: Papyrus interface registered");
 
-    RobCoMigrator::Log("[DBG] F4SEPlugin_Load: returning true");
     return true;
 }
