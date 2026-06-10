@@ -25,6 +25,29 @@ namespace RobCoMigrator
 	static constexpr const char* kModFolderName = "RobCoMigrator_Export";
 	static std::string g_modFolderName = kModFolderName;
 
+	// Lists whose (baseListCount + migrated entries) would exceed this are capped:
+	// the surplus is left script-injected instead of migrated, keeping the list
+	// RobCo Patcher rebuilds clear of the engine's hard 255-entry ceiling.
+	static constexpr int kMaxListEntries = 245;
+
+	// Plugin-name patterns (lowercased; a trailing '*' is a prefix wildcard) read
+	// from RobCoMigrator_ExcludedMods.ini. Injections owned-by or sourced-from one
+	// of these are neither migrated nor reverted - see LoadExcludedMods().
+	static std::vector<std::string> g_excludedPatterns;
+
+	// Filled by ScanLeveledLists(): per scanned target list, the exact injected
+	// LEVELED_OBJECTs that were migrated into the .ini - the only ones
+	// RevertMigratedEntries() may remove. Pointers stay valid for the
+	// Generate->Revert window (same session, no reload in between).
+	static std::unordered_map<RE::TESLevItem*, std::vector<RE::LEVELED_OBJECT*>> g_revertPlan;
+
+	// Filled by ScanLeveledLists(): per target list (keyed by its RobCoID), every
+	// form RobCoID currently live in its scriptAddedLists - INCLUDING excluded and
+	// over-cap ones. Used when updating an existing .ini to safely strip excluded
+	// entries: we only remove an excluded line if the game is actually re-injecting
+	// it right now (otherwise removing it would lose data - e.g. WSFW disabled).
+	static std::unordered_map<std::string, std::unordered_set<std::string>> g_liveInjectionIndex;
+
 	void Log(const std::string& msg) {
 		std::lock_guard<std::mutex> lock(logMutex);
 		// F4SE::GetLogDirectoryPath() returns Documents/My Games/Fallout4/F4SE.
@@ -116,6 +139,108 @@ namespace RobCoMigrator
 		} catch (...) {
 			return nullptr;
 		}
+	}
+
+	// Plugin token of a "Plugin|LocalID" RobCoID (everything before the '|').
+	static std::string PluginFromRobCoID(const std::string& a_robCoID) {
+		auto pos = a_robCoID.find('|');
+		return (pos == std::string::npos) ? a_robCoID : a_robCoID.substr(0, pos);
+	}
+
+	static std::string ToLowerCopy(std::string s) {
+		std::transform(s.begin(), s.end(), s.begin(),
+			[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		return s;
+	}
+
+	static void AddExcludePattern(std::string a_line) {
+		if (!a_line.empty() && a_line.back() == '\r') a_line.pop_back();
+		std::size_t start = a_line.find_first_not_of(" \t");
+		if (start == std::string::npos) return;
+		std::size_t end = a_line.find_last_not_of(" \t");
+		a_line = a_line.substr(start, end - start + 1);
+		if (a_line.empty() || a_line.starts_with("//") || a_line[0] == ';' || a_line[0] == '#') return;
+		g_excludedPatterns.push_back(ToLowerCopy(std::move(a_line)));
+	}
+
+	// Written to RobCoMigrator_ExcludedMods.ini when it's missing. Kept in sync with
+	// the shipped src/RobCoMigrator_ExcludedMods.ini; this string is the runtime
+	// fallback so the feature still works if the file can't be read.
+	static constexpr const char* kDefaultExcludedMods =
+R"EXCL(// RobCo Migrator - Excluded Mods
+//
+// Leveled-list injections coming from the plugins listed here are treated as
+// "transient": they are NOT written into the RobCo Patcher .ini and they are
+// NOT reverted (erased) from your save. Use this for mods that re-inject their
+// leveled lists on EVERY game load (e.g. Workshop Framework, Sim Settlements 2).
+// Migrating those would cause double-injection - the mod re-adds them AND RobCo
+// Patcher re-adds them - which on large lists trips the engine's 255-entries
+// limit and crashes the game on save.
+//
+// FORMAT
+//   - One plugin name per line (e.g. WorkshopFramework.esm).
+//   - Case-insensitive.
+//   - A trailing '*' is a prefix wildcard: "SS2*" matches SS2.esm,
+//     SS2Extended.esp, SS2_XPAC_Chapter2.esm, etc.
+//   - Lines starting with //  ;  or  #  are comments.
+//
+// HOW MATCHING IS APPLIED (both directions)
+//   - If a target leveled list is OWNED by an excluded plugin (e.g. the
+//     WSFW_InjectableItemHolder_* lists owned by WorkshopFramework.esm), the
+//     WHOLE list is skipped.
+//   - Otherwise, individual injected items whose SOURCE plugin is excluded are
+//     skipped (left in place) and the rest of that list migrates normally.
+
+WorkshopFramework.esm
+SS2*
+)EXCL";
+
+	static fs::path ExcludedModsPath() {
+		return fs::path("Data") / "F4SE" / "Plugins" / "RobCoMigrator_ExcludedMods.ini";
+	}
+
+	// (Re)loads the exclusion patterns. Called at the start of every GeneratePatch
+	// so edits take effect without a game restart. Auto-creates a documented default
+	// file if none exists; falls back to the built-in defaults if it can't be read.
+	void LoadExcludedMods() {
+		g_excludedPatterns.clear();
+		fs::path path = ExcludedModsPath();
+
+		std::error_code ec;
+		if (!fs::exists(path, ec)) {
+			fs::create_directories(path.parent_path(), ec);
+			std::ofstream out(path, std::ios_base::trunc);
+			if (out.is_open()) {
+				out << kDefaultExcludedMods;
+				Log(std::format("Created default excluded-mods file: {}", path.string()));
+			}
+		}
+
+		std::ifstream in(path);
+		if (in.is_open()) {
+			std::string line;
+			while (std::getline(in, line)) AddExcludePattern(line);
+			Log(std::format("Loaded {} excluded-mod pattern(s) from RobCoMigrator_ExcludedMods.ini.", g_excludedPatterns.size()));
+		} else {
+			std::stringstream ss(kDefaultExcludedMods);
+			std::string line;
+			while (std::getline(ss, line)) AddExcludePattern(line);
+			Log(std::format("Could not read excluded-mods file; using {} built-in default pattern(s).", g_excludedPatterns.size()));
+		}
+	}
+
+	static bool IsPluginExcluded(const std::string& a_plugin) {
+		if (a_plugin.empty() || g_excludedPatterns.empty()) return false;
+		std::string p = ToLowerCopy(a_plugin);
+		for (const auto& pat : g_excludedPatterns) {
+			if (!pat.empty() && pat.back() == '*') {
+				std::size_t n = pat.size() - 1;
+				if (p.size() >= n && p.compare(0, n, pat, 0, n) == 0) return true;
+			} else if (p == pat) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	std::string GetFileHeaderTimestamp(const fs::path& a_path, const std::string& a_fallbackTimestamp) {
@@ -386,16 +511,37 @@ namespace RobCoMigrator
 	// TESForm (e.g. a mod-edited override, a partial save state, or an NG+ reset). A
 	// plain "entry->form != nullptr" check does NOT catch a dangling pointer - we only
 	// find out it's bad once we dereference it, which is too late. See ScanOneListGuarded.
-	static bool ScanOneListImpl(RE::TESLevItem* a_listForm, TargetListData* a_out) {
+	static bool ScanOneListImpl(RE::TESLevItem* a_listForm, TargetListData* a_out,
+		std::vector<RE::LEVELED_OBJECT*>* a_migratedPtrs,
+		std::vector<std::string>* a_allLiveForms, bool* a_listExcluded) {
 		a_out->listEditorID = GetEditorID(a_listForm);
 		a_out->listRobCoID = GetRobCoID(a_listForm);
+
+		// A list OWNED by an excluded mod (e.g. a WSFW_InjectableItemHolder_* owned
+		// by WorkshopFramework.esm) is migrated as a whole-list skip: nothing of it
+		// goes into the .ini or the revert plan. We still record its live forms
+		// (below) so an existing .ini can be safely cleaned of those lines.
+		const bool listExcluded = IsPluginExcluded(PluginFromRobCoID(a_out->listRobCoID));
+		*a_listExcluded = listExcluded;
+
+		// Cap the rebuilt list (static base + entries RobCo Patcher will re-add)
+		// below the engine's 255 ceiling; the surplus stays script-injected.
+		const int headroom = kMaxListEntries - static_cast<int>(a_listForm->baseListCount);
+		int migrated = 0;
 
 		for (std::uint8_t i = 0; i < a_listForm->scriptListCount; ++i) {
 			auto entry = a_listForm->scriptAddedLists[i];
 			if (!entry || !entry->form) continue;
 
+			std::string formRobCoID = GetRobCoID(entry->form);
+			a_allLiveForms->push_back(formRobCoID);  // every live entry, for safe pruning
+
+			if (listExcluded) continue;                                   // whole list left injected
+			if (IsPluginExcluded(PluginFromRobCoID(formRobCoID))) continue;  // excluded source: left injected
+			if (migrated >= headroom) continue;                           // over cap: left injected
+
 			InjectionEntry inj;
-			inj.formRobCoID = GetRobCoID(entry->form);
+			inj.formRobCoID = std::move(formRobCoID);
 			inj.formEditorID = GetEditorID(entry->form);
 			inj.formName = GetFullName(entry->form);
 			inj.level = entry->level;
@@ -409,6 +555,8 @@ namespace RobCoMigrator
 			inj.commentBlock = std::format("//     ╰─ [Lvl {}] {}\n", inj.level, itemDisplay);
 
 			a_out->entries.push_back(std::move(inj));
+			a_migratedPtrs->push_back(entry);
+			++migrated;
 		}
 		return true;
 	}
@@ -417,25 +565,34 @@ namespace RobCoMigrator
 	// dereferencing it raises an access violation; we catch it, skip just that list,
 	// and keep going instead of crashing the whole game. This frame deliberately holds
 	// no C++ objects that need unwinding, so __try is legal here (avoids C2712).
-	static bool ScanOneListGuarded(RE::TESLevItem* a_listForm, TargetListData* a_out) noexcept {
+	static bool ScanOneListGuarded(RE::TESLevItem* a_listForm, TargetListData* a_out,
+		std::vector<RE::LEVELED_OBJECT*>* a_migratedPtrs,
+		std::vector<std::string>* a_allLiveForms, bool* a_listExcluded) noexcept {
 		__try {
-			return ScanOneListImpl(a_listForm, a_out);
+			return ScanOneListImpl(a_listForm, a_out, a_migratedPtrs, a_allLiveForms, a_listExcluded);
 		} __except (EXCEPTION_EXECUTE_HANDLER) {
 			return false;
 		}
 	}
 
 	std::vector<TargetListData> ScanLeveledLists() {
+		g_revertPlan.clear();
+		g_liveInjectionIndex.clear();
+
 		std::vector<TargetListData> scanned;
 		auto dataHandler = RE::TESDataHandler::GetSingleton();
 		if (!dataHandler) return scanned;
 
 		int skipped = 0;
+		int excludedLists = 0;
 		for (auto listForm : dataHandler->GetFormArray<RE::TESLevItem>()) {
 			if (!listForm || listForm->scriptListCount <= 0 || !listForm->scriptAddedLists) continue;
 
 			TargetListData listData;
-			if (!ScanOneListGuarded(listForm, &listData)) {
+			std::vector<RE::LEVELED_OBJECT*> migratedPtrs;
+			std::vector<std::string> allLiveForms;
+			bool listExcluded = false;
+			if (!ScanOneListGuarded(listForm, &listData, &migratedPtrs, &allLiveForms, &listExcluded)) {
 				++skipped;
 				Log(std::format("WARNING: Skipped leveled list '{}' - access violation while reading its "
 								"script-added entries (likely a dangling/invalid injected form left by another mod). "
@@ -444,11 +601,27 @@ namespace RobCoMigrator
 				continue;
 			}
 
+			// Index every live-injected form (incl. excluded/over-cap) so an existing
+			// .ini can be cleaned of excluded lines only when they're truly live.
+			if (!allLiveForms.empty()) {
+				auto& set = g_liveInjectionIndex[listData.listRobCoID];
+				for (auto& f : allLiveForms) set.insert(std::move(f));
+			}
+
+			if (listExcluded) {
+				++excludedLists;
+				continue;
+			}
+
 			if (!listData.entries.empty()) {
+				g_revertPlan.emplace(listForm, std::move(migratedPtrs));
 				scanned.push_back(std::move(listData));
 			}
 		}
 
+		if (excludedLists > 0) {
+			Log(std::format("Skipped {} leveled list(s) owned by excluded mods (left untouched).", excludedLists));
+		}
 		if (skipped > 0) {
 			Log(std::format("Scan finished with {} leveled list(s) skipped due to bad injected data. "
 							"The rest were migrated normally.", skipped));
@@ -487,6 +660,30 @@ namespace RobCoMigrator
 			}
 		}
 		return a_existing;
+	}
+
+	// When updating an existing .ini we strip lines that now belong to excluded
+	// mods - but ONLY where the game is currently re-injecting that exact form into
+	// that exact list (per g_liveInjectionIndex, which ScanLeveledLists just built).
+	// If a form isn't live (e.g. the user disabled WSFW, or it's a persistent entry
+	// that legitimately lives in the file), we keep it so nothing is silently lost.
+	// Returns the number of entries removed.
+	int PruneExcludedLiveEntries(std::vector<TargetListData>& a_lists) {
+		int removed = 0;
+		for (auto& list : a_lists) {
+			const bool ownerExcluded = IsPluginExcluded(PluginFromRobCoID(list.listRobCoID));
+			auto liveIt = g_liveInjectionIndex.find(list.listRobCoID);
+			const std::unordered_set<std::string>* live =
+				(liveIt != g_liveInjectionIndex.end()) ? &liveIt->second : nullptr;
+
+			std::size_t before = list.entries.size();
+			std::erase_if(list.entries, [&](const InjectionEntry& e) {
+				const bool excluded = ownerExcluded || IsPluginExcluded(PluginFromRobCoID(e.formRobCoID));
+				return excluded && live && live->count(e.formRobCoID) > 0;
+			});
+			removed += static_cast<int>(before - list.entries.size());
+		}
+		return removed;
 	}
 
 	void SortLists(std::vector<TargetListData>& a_lists) {
@@ -613,8 +810,21 @@ namespace RobCoMigrator
 							totalBefore, parsed.lists.size(), parsed.preservedLines.size(), g_lastFixCount));
 		}
 
+		LoadExcludedMods();
+
 		auto scanned = ScanLeveledLists();
 		Log(std::format("Scanned {} target lists with dynamic injections.", scanned.size()));
+
+		// Updating an existing file: drop excluded-mod lines, but only the ones the
+		// game is actually re-injecting right now (safe to remove). Anything not
+		// confirmed live is kept untouched so we never lose a user's data.
+		if (!parsed.lists.empty()) {
+			int pruned = PruneExcludedLiveEntries(parsed.lists);
+			if (pruned > 0) {
+				Log(std::format("Cleaned {} excluded-mod entr(ies) from the existing INI "
+								"(confirmed live in-game, so safe to remove).", pruned));
+			}
+		}
 
 		auto merged = MergeScanIntoExisting(std::move(parsed.lists), scanned);
 		std::erase_if(merged, [](const TargetListData& l) { return l.entries.empty(); });
@@ -629,6 +839,16 @@ namespace RobCoMigrator
 		}
 
 		SortLists(merged);
+
+		for (const auto& list : merged) {
+			if (list.entries.size() > static_cast<std::size_t>(kMaxListEntries)) {
+				Log(std::format("WARNING: target list '{}' has {} entries in the patch, above the {} "
+								"safety cap. Likely an older or hand-edited file; trim it to stay clear of "
+								"the engine's 255-entry save crash.",
+								list.listEditorID, list.entries.size(), kMaxListEntries));
+			}
+		}
+
 		WriteINI(iniPath, merged, parsed.preservedLines, displayTimestamp);
 		WriteCSV(csvPath, merged);
 
@@ -648,22 +868,82 @@ namespace RobCoMigrator
 		return 1;
 	}
 
-	std::vector<RE::TESForm*> GetInjectedLists(std::monostate) {
-		std::vector<RE::TESForm*> result;
-		auto dataHandler = RE::TESDataHandler::GetSingleton();
-		if (!dataHandler) return result;
-
-		for (auto listForm : dataHandler->GetFormArray<RE::TESLevItem>()) {
-			if (listForm && listForm->scriptListCount > 0) {
-				result.push_back(listForm);
+	// SEH-guarded surgical removal: drops exactly the migrated LEVELED_OBJECTs from
+	// one list and deletes them (mirroring ClearScriptLevObjects' ownership). We
+	// re-find each pointer by identity every time because RemoveNthScriptLevObject
+	// reflows the array. This frame holds only trivially-destructible locals, so
+	// __try is legal here (avoids C2712). Returns the number removed.
+	static int RemoveMigratedFromListGuarded(RE::TESLevItem* a_list,
+		RE::LEVELED_OBJECT* const* a_targets, std::size_t a_count) noexcept {
+		int removed = 0;
+		__try {
+			for (std::size_t k = 0; k < a_count; ++k) {
+				RE::LEVELED_OBJECT* target = a_targets[k];
+				int idx = -1;
+				for (std::uint8_t i = 0; i < a_list->scriptListCount; ++i) {
+					if (a_list->scriptAddedLists[i] == target) { idx = static_cast<int>(i); break; }
+				}
+				if (idx < 0) continue;  // already gone
+				a_list->RemoveNthScriptLevObject(static_cast<std::uint8_t>(idx));
+				delete target;
+				++removed;
 			}
+		} __except (EXCEPTION_EXECUTE_HANDLER) {
+		}
+		return removed;
+	}
+
+	// DEBUG: snapshot the current live injected-list state to the log. Reads ONLY
+	// scriptListCount on each TESLevItem (never the injected entry->form pointers),
+	// so it's always safe to call. Used to bracket the Papyrus Revert() loop and our
+	// own C++ clear so we can see exactly where entries do/don't get removed.
+	void LogInjectedListSizes(std::monostate, RE::BSFixedString a_label) {
+		auto dataHandler = RE::TESDataHandler::GetSingleton();
+		if (!dataHandler) {
+			Log(std::format("[DBG] {} | no data handler.", a_label.c_str()));
+			return;
 		}
 
+		int listCount = 0;
+		int totalEntries = 0;
+		std::string detail;
+		for (auto listForm : dataHandler->GetFormArray<RE::TESLevItem>()) {
+			if (!listForm || listForm->scriptListCount <= 0) continue;
+			++listCount;
+			int n = static_cast<int>(listForm->scriptListCount);
+			totalEntries += n;
+			detail += std::format("\n[DBG]     {} = {}", GetEditorID(listForm), n);
+		}
+
+		Log(std::format("[DBG] {} | {} list(s) injected, {} total injected entries.{}",
+						a_label.c_str(), listCount, totalEntries, detail));
+	}
+
+	// Surgically removes ONLY the entries the last GeneratePatch migrated into the
+	// .ini, using the plan ScanLeveledLists built. Excluded-mod and over-cap entries
+	// are left injected (untouched). Resets the revert lock so a second click can't
+	// double-revert. Returns the total number of entries removed.
+	std::int32_t RevertMigratedEntries(std::monostate) {
+		LogInjectedListSizes(std::monostate{}, "BEFORE surgical revert");
+
+		int totalRemoved = 0;
+		int listsTouched = 0;
+		for (auto& [listForm, ptrs] : g_revertPlan) {
+			if (!listForm || ptrs.empty()) continue;
+			int r = RemoveMigratedFromListGuarded(listForm, ptrs.data(), ptrs.size());
+			totalRemoved += r;
+			if (r > 0) ++listsTouched;
+		}
+
+		g_revertPlan.clear();
+		g_liveInjectionIndex.clear();
 		g_bSafeToRevert = false;
 		g_bUserUnlockedRevert = false;
 
-		Log(std::format("Handed off {} injected Leveled Items to Papyrus for Revert().", result.size()));
-		return result;
+		Log(std::format("Surgical revert: removed {} migrated entr(ies) from {} list(s); "
+						"excluded/over-cap entries left injected.", totalRemoved, listsTouched));
+		LogInjectedListSizes(std::monostate{}, "AFTER surgical revert");
+		return totalRemoved;
 	}
 
 	std::int32_t GetLastFixCount(std::monostate) {
@@ -740,10 +1020,11 @@ namespace RobCoMigrator
 		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GeneratePatch", GeneratePatch));
 		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "SetRevertUnlocked", SetRevertUnlocked));
 		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GetRevertStatus", GetRevertStatus));
-		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GetInjectedLists", GetInjectedLists));
 		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GetLastFixCount", GetLastFixCount));
 		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GetCurrentPlayerName", GetCurrentPlayerName));
 		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GetForeignPlayerFileWarning", GetForeignPlayerFileWarning));
+		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "LogInjectedListSizes", LogInjectedListSizes));
+		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "RevertMigratedEntries", RevertMigratedEntries));
 		return true;
 	}
 }

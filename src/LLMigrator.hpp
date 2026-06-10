@@ -42,10 +42,15 @@ namespace RobCoMigrator
     std::int32_t GeneratePatch(std::monostate, RE::BSFixedString a_modFolderName);
     void SetRevertUnlocked(std::monostate, bool a_unlocked);
     std::int32_t GetRevertStatus(std::monostate);
-    std::vector<RE::TESForm*> GetInjectedLists(std::monostate);
     std::int32_t GetLastFixCount(std::monostate);
     RE::BSFixedString GetCurrentPlayerName(std::monostate);
     RE::BSFixedString GetForeignPlayerFileWarning(std::monostate);
+
+    // DEBUG: snapshot live injected-list sizes to the log under a_label.
+    void LogInjectedListSizes(std::monostate, RE::BSFixedString a_label);
+    // Surgically remove ONLY the entries migrated by the last GeneratePatch run
+    // (leaving excluded-mod and over-cap entries injected). Returns entries removed.
+    std::int32_t RevertMigratedEntries(std::monostate);
 
     bool RegisterPapyrus(RE::BSScript::IVirtualMachine* a_vm);
 }

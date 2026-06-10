@@ -10,6 +10,18 @@ The plugin has two parts:
 - **C++ DLL** (`src/LLMigrator.cpp`): Iterates `TESDataHandler`'s `TESLevItem` array, collecting `scriptAddedLists` entries, and writes `.ini`/`.csv` output to `Data/F4SE/Plugins/RobCo_Patcher/leveledList/<folder>/`.
 - **Papyrus scripts** (`src/RobCoMigrator.psc`): Binds to the C++ native functions and drives the MCM UI buttons. `src/MCM.psc` is a stub for local compilation only.
 
+## Fallout 4 version history & target runtimes — READ THIS FIRST
+
+**Do NOT assume the latest Fallout 4 build is the 2024 "next-gen" update.** It is not. AIs repeatedly get this wrong and reason about stale engine behavior; check this section before attributing anything to a game update. As of this writing the relevant timeline is:
+
+- **NG ("next-gen") update** — *old now.* Introduced the post-1.10.163 runtimes. This is the one most pre-2025 docs/AIs think is "current." It isn't.
+- **AE update — December 2025.** A **big** update.
+- **May 2026 update — most recent.** A **small** update. (When in doubt about "the recent update," this is the current one — not NG.)
+
+**We target all NG+ versions for now** (NG and everything after: NG, AE, May 2026). OG (the original 1.10.163 line) is built by CommonLibF4 (`COMMONLIB_RUNTIME_OG/NG/AE = ON`, see Architecture) but is not the active testing/support focus. In-game testing happens on the latest (May 2026) runtime.
+
+When a behavior changed "after an update," name *which* update (AE Dec 2025 vs the May 2026 patch) rather than saying "the update" or "NG" — and verify it's actually engine-caused before blaming a patch (e.g. transient runtime re-injection by another mod can masquerade as a regression).
+
 ## Build
 
 **The DLL must be built on Windows** (MSVC, cross-compilation is not supported).

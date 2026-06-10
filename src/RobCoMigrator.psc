@@ -13,9 +13,6 @@ Function SetRevertUnlocked(Bool a_unlocked) global native
 ; Returns: -2 = User Locked, -1 = Not Generated, 1 = Ready
 Int Function GetRevertStatus() global native
 
-; Grabs the raw forms directly from the DataHandler scanner
-Form[] Function GetInjectedLists() global native
-
 ; Number of auto-corrections + preserved lines from the LAST GeneratePatch run
 Int Function GetLastFixCount() global native
 
@@ -26,6 +23,13 @@ String Function GetCurrentPlayerName() global native
 ; that belong to OTHER characters, or "" if all the patch files match the current
 ; player. Safe to call from any MCM button - it's pure filesystem + display name.
 String Function GetForeignPlayerFileWarning() global native
+
+; DEBUG: snapshots current injected-list sizes to RobCoMigrator.log under a_label.
+Function LogInjectedListSizes(String a_label) global native
+
+; Surgically removes ONLY the entries the last GeneratePatch migrated into the ini
+; (leaving excluded-mod and over-cap entries injected). Returns entries removed.
+Int Function RevertMigratedEntries() global native
 
 
 ; ---------------------------------------------
@@ -96,26 +100,19 @@ Function RunMigrationRevert() global
         Return
     EndIf
 
-    Form[] listsToRevert = GetInjectedLists()
-    If listsToRevert.Length == 0
-        Debug.MessageBox("NOTHING TO REVERT\n\nNo live script-injected entries found. You likely already reverted in a previous session.")
+    ; Surgical revert: removes ONLY the entries we migrated into the .ini, leaving
+    ; excluded-mod (e.g. WSFW / SS2) and over-cap entries injected. The C++ side
+    ; brackets this with [DBG] before/after snapshots in RobCoMigrator.log.
+    Int removed = RevertMigratedEntries()
+
+    If removed == 0
+        Debug.MessageBox("NOTHING TO REVERT\n\nNo migrated entries were found to remove. Either you already reverted, or every injected list was excluded (see Data/F4SE/Plugins/RobCoMigrator_ExcludedMods.ini).")
         Return
     EndIf
 
-    Int revertedCount = 0
-    Int i = 0
-    While i < listsToRevert.Length
-        LeveledItem lItem = listsToRevert[i] as LeveledItem
-        If lItem
-            lItem.Revert()
-            revertedCount += 1
-        EndIf
-        i += 1
-    EndWhile
-
-    SetRevertUnlocked(false)
-
-    String msg = "REVERTED " + revertedCount + " LEVELED LIST(S)\n\n"
+    String msg = "REVERT DONE\n\n"
+    msg += "Removed " + removed + " migrated entr(ies) from your leveled lists.\n"
+    msg += "(Excluded-mod and over-cap entries were left in place. See RobCoMigrator.log for [DBG] before/after sizes.)\n\n"
     msg += "Now:\n"
     msg += "  1. Save to a NEW slot.\n"
     msg += "  2. Exit to desktop.\n"
