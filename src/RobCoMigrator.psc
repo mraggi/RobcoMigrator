@@ -24,9 +24,6 @@ String Function GetCurrentPlayerName() global native
 ; player. Safe to call from any MCM button - it's pure filesystem + display name.
 String Function GetForeignPlayerFileWarning() global native
 
-; DEBUG: snapshots current injected-list sizes to RobCoMigrator.log under a_label.
-Function LogInjectedListSizes(String a_label) global native
-
 ; Surgically removes ONLY the entries the last GeneratePatch migrated into the ini
 ; (leaving excluded-mod and over-cap entries injected). Returns entries removed.
 Int Function RevertMigratedEntries() global native
@@ -101,8 +98,7 @@ Function RunMigrationRevert() global
     EndIf
 
     ; Surgical revert: removes ONLY the entries we migrated into the .ini, leaving
-    ; excluded-mod (e.g. WSFW / SS2) and over-cap entries injected. The C++ side
-    ; brackets this with [DBG] before/after snapshots in RobCoMigrator.log.
+    ; excluded-mod (e.g. WSFW / SS2) and over-cap entries injected.
     Int removed = RevertMigratedEntries()
 
     If removed == 0
@@ -112,7 +108,7 @@ Function RunMigrationRevert() global
 
     String msg = "REVERT DONE\n\n"
     msg += "Removed " + removed + " migrated entr(ies) from your leveled lists.\n"
-    msg += "(Excluded-mod and over-cap entries were left in place. See RobCoMigrator.log for [DBG] before/after sizes.)\n\n"
+    msg += "(Excluded-mod and over-cap entries were left in place. See RobCoMigrator.log for details.)\n\n"
     msg += "Now:\n"
     msg += "  1. Save to a NEW slot.\n"
     msg += "  2. Exit to desktop.\n"

@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 4.3.0)
 
 set(COMMONLIB_PLUGIN_NAME "RobCoMigrator")
 set(COMMONLIB_PLUGIN_AUTHOR "Miguel Raggi")
-set(COMMONLIB_PLUGIN_VERSION "0.9.0.0")
+set(COMMONLIB_PLUGIN_VERSION "0.9.1.0")
 set(COMMONLIB_PLUGIN_LICENSE "GPL-3.0 License")
 set(COMMONLIB_PLUGIN_DESCRIPTION "Safely extract and format dynamic leveled list injections into RobCo Patcher files.")
 

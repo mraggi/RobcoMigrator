@@ -423,6 +423,11 @@ SS2*
 
 		std::string line;
 		while (std::getline(ini, line)) {
+			// Strip stray NUL bytes first. An unclean shutdown (crash, force-kill)
+			// can leave a block of NULs zero-filled into the file by the filesystem;
+			// without this we'd "preserve" that garbage verbatim and carry it forward,
+			// growing it on every rewrite. Real content glued to it is kept.
+			std::erase(line, '\0');
 			if (!line.empty() && line.back() == '\r') line.pop_back();
 
 			std::size_t firstNonWs = line.find_first_not_of(" \t");
@@ -893,39 +898,11 @@ SS2*
 		return removed;
 	}
 
-	// DEBUG: snapshot the current live injected-list state to the log. Reads ONLY
-	// scriptListCount on each TESLevItem (never the injected entry->form pointers),
-	// so it's always safe to call. Used to bracket the Papyrus Revert() loop and our
-	// own C++ clear so we can see exactly where entries do/don't get removed.
-	void LogInjectedListSizes(std::monostate, RE::BSFixedString a_label) {
-		auto dataHandler = RE::TESDataHandler::GetSingleton();
-		if (!dataHandler) {
-			Log(std::format("[DBG] {} | no data handler.", a_label.c_str()));
-			return;
-		}
-
-		int listCount = 0;
-		int totalEntries = 0;
-		std::string detail;
-		for (auto listForm : dataHandler->GetFormArray<RE::TESLevItem>()) {
-			if (!listForm || listForm->scriptListCount <= 0) continue;
-			++listCount;
-			int n = static_cast<int>(listForm->scriptListCount);
-			totalEntries += n;
-			detail += std::format("\n[DBG]     {} = {}", GetEditorID(listForm), n);
-		}
-
-		Log(std::format("[DBG] {} | {} list(s) injected, {} total injected entries.{}",
-						a_label.c_str(), listCount, totalEntries, detail));
-	}
-
 	// Surgically removes ONLY the entries the last GeneratePatch migrated into the
 	// .ini, using the plan ScanLeveledLists built. Excluded-mod and over-cap entries
 	// are left injected (untouched). Resets the revert lock so a second click can't
 	// double-revert. Returns the total number of entries removed.
 	std::int32_t RevertMigratedEntries(std::monostate) {
-		LogInjectedListSizes(std::monostate{}, "BEFORE surgical revert");
-
 		int totalRemoved = 0;
 		int listsTouched = 0;
 		for (auto& [listForm, ptrs] : g_revertPlan) {
@@ -942,7 +919,6 @@ SS2*
 
 		Log(std::format("Surgical revert: removed {} migrated entr(ies) from {} list(s); "
 						"excluded/over-cap entries left injected.", totalRemoved, listsTouched));
-		LogInjectedListSizes(std::monostate{}, "AFTER surgical revert");
 		return totalRemoved;
 	}
 
@@ -1023,7 +999,6 @@ SS2*
 		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GetLastFixCount", GetLastFixCount));
 		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GetCurrentPlayerName", GetCurrentPlayerName));
 		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "GetForeignPlayerFileWarning", GetForeignPlayerFileWarning));
-		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "LogInjectedListSizes", LogInjectedListSizes));
 		a_vm->BindNativeMethod(new RE::BSScript::NativeFunction("RobCoMigrator", "RevertMigratedEntries", RevertMigratedEntries));
 		return true;
 	}

@@ -31,16 +31,6 @@ namespace {
             }
             break;
 
-        case F4SE::MessagingInterface::MessageType::kPostLoadGame:
-            // DEBUG: fires the instant a save finishes loading - AFTER the engine
-            // applies its change forms, but BEFORE Papyrus OnPlayerLoadGame scripts
-            // run. So this snapshot is "what the SAVE itself contains." If it shows
-            // injections right after a clean revert+save, the entries are baked into
-            // the save's change forms; if it shows 0 here but they reappear once you
-            // open the MCM, a still-active source mod is re-injecting on load.
-            RobCoMigrator::LogInjectedListSizes(std::monostate{}, "kPostLoadGame (save just finished loading)");
-            break;
-
         default:
             break;
         }

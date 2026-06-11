@@ -46,8 +46,6 @@ namespace RobCoMigrator
     RE::BSFixedString GetCurrentPlayerName(std::monostate);
     RE::BSFixedString GetForeignPlayerFileWarning(std::monostate);
 
-    // DEBUG: snapshot live injected-list sizes to the log under a_label.
-    void LogInjectedListSizes(std::monostate, RE::BSFixedString a_label);
     // Surgically remove ONLY the entries migrated by the last GeneratePatch run
     // (leaving excluded-mod and over-cap entries injected). Returns entries removed.
     std::int32_t RevertMigratedEntries(std::monostate);
